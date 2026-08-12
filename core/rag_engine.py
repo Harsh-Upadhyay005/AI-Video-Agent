@@ -1,11 +1,23 @@
 import os
-from langchain_mistralai import ChatMistralAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+
+try:
+    from langchain_mistralai import ChatMistralAI
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
+    from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+except Exception:
+    ChatMistralAI = None
+    ChatPromptTemplate = None
+    StrOutputParser = None
+    RunnablePassthrough = None
+    RunnableLambda = None
+
 from core.vector_store import build_vector_store, load_vector_store, get_retriever
 
+
 def get_llm():
+    if ChatMistralAI is None:
+        return None
     return ChatMistralAI(
         model="mistral-small-latest",
         mistral_api_key=os.getenv("MISTRAL_API_KEY"),
@@ -15,13 +27,13 @@ def get_llm():
 def format_docs(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
-def build_rag_chain(transcript:str):
-
+def build_rag_chain(transcript: str):
     vector_store = build_vector_store(transcript)
-
-    retriever = get_retriever(vector_store, k = 4)
+    retriever = get_retriever(vector_store, k=4)
 
     llm = get_llm()
+    if llm is None or ChatPromptTemplate is None or StrOutputParser is None or RunnablePassthrough is None or RunnableLambda is None:
+        return None
 
     prompt = ChatPromptTemplate.from_messages(
 
@@ -60,6 +72,9 @@ def load_rag_chain():
     retriever = get_retriever(vector_store)
 
     llm = get_llm()
+    if llm is None or ChatPromptTemplate is None or StrOutputParser is None or RunnablePassthrough is None or RunnableLambda is None:
+        return None
+
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -90,7 +105,10 @@ Context from meeting transcript:
     return rag_chain
 
 
-def ask_question(rag_chain, question:str) -> str:
+def ask_question(rag_chain, question: str) -> str:
+    if rag_chain is None:
+        return "RAG is unavailable because the required LLM dependencies are not installed."
+
     print(f"Question : {question}")
     answer = rag_chain.invoke(question)
     print(f"answer :{answer}")
