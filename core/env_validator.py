@@ -170,7 +170,7 @@ class EnvValidator:
             
             if not value:
                 errors.append(
-                    f"❌ {var_name}: REQUIRED but not set\n"
+                    f" {var_name}: REQUIRED but not set\n"
                     f"   Description: {config['description']}"
                 )
                 continue
@@ -180,12 +180,12 @@ class EnvValidator:
                 try:
                     if not config["validation"](value):
                         errors.append(
-                            f"❌ {var_name}: Invalid value\n"
+                            f" {var_name}: Invalid value\n"
                             f"   Error: {config['error']}"
                         )
                 except Exception as e:
                     errors.append(
-                        f"❌ {var_name}: Validation failed\n"
+                        f" {var_name}: Validation failed\n"
                         f"   Error: {str(e)}"
                     )
         
@@ -207,12 +207,12 @@ class EnvValidator:
             if not value:
                 if "default" in config:
                     warnings.append(
-                        f"⚠️  {var_name}: Not set, using default '{config['default']}'\n"
+                        f"  {var_name}: Not set, using default '{config['default']}'\n"
                         f"   Description: {config['description']}"
                     )
                 else:
                     warnings.append(
-                        f"⚠️  {var_name}: Not set (optional)\n"
+                        f"  {var_name}: Not set (optional)\n"
                         f"   Description: {config['description']}"
                     )
                 continue
@@ -222,12 +222,12 @@ class EnvValidator:
                 try:
                     if not config["validation"](value):
                         warnings.append(
-                            f"⚠️  {var_name}: Invalid value '{value}'\n"
+                            f"  {var_name}: Invalid value '{value}'\n"
                             f"   Error: {config['error']}"
                         )
                 except Exception as e:
                     warnings.append(
-                        f"⚠️  {var_name}: Validation failed\n"
+                        f"  {var_name}: Validation failed\n"
                         f"   Error: {str(e)}"
                     )
         
@@ -248,7 +248,7 @@ class EnvValidator:
             
             if not value:
                 warnings.append(
-                    f"ℹ️  {var_name}: Not set, using default {config['default']}\n"
+                    f"{var_name}: Not set, using default {config['default']}\n"
                     f"   Description: {config['description']}"
                 )
                 continue
@@ -259,13 +259,13 @@ class EnvValidator:
                 
                 if int_value < config["min"] or int_value > config["max"]:
                     warnings.append(
-                        f"⚠️  {var_name}: Value {int_value} out of range\n"
+                        f" {var_name}: Value {int_value} out of range\n"
                         f"   Valid range: {config['min']} - {config['max']}\n"
                         f"   Using default: {config['default']}"
                     )
             except ValueError:
                 warnings.append(
-                    f"⚠️  {var_name}: Invalid integer value '{value}'\n"
+                    f"  {var_name}: Invalid integer value '{value}'\n"
                     f"   Using default: {config['default']}"
                 )
         
@@ -287,53 +287,53 @@ class EnvValidator:
             ConfigurationError: If strict=True and validation fails
         """
         print("\n" + "=" * 80)
-        print("🔍 AI Video Agent - Environment Validation")
+        print(" AI Video Agent - Environment Validation")
         print("=" * 80 + "\n")
         
         # Load .env file
         env_loaded = EnvValidator.load_env_file(env_file)
         if not env_loaded:
-            print(f"⚠️  No .env file found. Using system environment variables.\n")
-            print(f"💡 Tip: Copy .env.example to .env and configure your settings.\n")
+            print(f" No .env file found. Using system environment variables.\n")
+            print(f" Tip: Copy .env.example to .env and configure your settings.\n")
         
         # Validate required variables
-        print("📋 Validating Required Variables...")
+        print(" Validating Required Variables...")
         is_valid, errors = EnvValidator.validate_required_vars()
         
         if errors:
             print("\n" + "\n\n".join(errors) + "\n")
             if strict:
                 print("=" * 80)
-                print("❌ Validation Failed: Required environment variables are missing or invalid.")
+                print(" Validation Failed: Required environment variables are missing or invalid.")
                 print("=" * 80 + "\n")
                 raise ConfigurationError(
                     "Required environment variables validation failed. "
                     "Please check your .env file or environment configuration."
                 )
         else:
-            print("✅ All required variables are set and valid\n")
+            print("All required variables are set and valid\n")
         
         # Validate optional variables
-        print("📋 Validating Optional Variables...")
+        print(" Validating Optional Variables...")
         opt_warnings = EnvValidator.validate_optional_vars()
         if opt_warnings:
             print("\n" + "\n\n".join(opt_warnings) + "\n")
         else:
-            print("✅ All optional variables are properly configured\n")
+            print("All optional variables are properly configured\n")
         
         # Validate numeric variables
-        print("📋 Validating Numeric Variables...")
+        print(" Validating Numeric Variables...")
         num_warnings = EnvValidator.validate_numeric_vars()
         if num_warnings:
             print("\n" + "\n\n".join(num_warnings) + "\n")
         else:
-            print("✅ All numeric variables are within valid ranges\n")
+            print(" All numeric variables are within valid ranges\n")
         
         print("=" * 80)
         if is_valid:
-            print("✅ Environment Validation Complete - Ready to Start")
+            print(" Environment Validation Complete - Ready to Start")
         else:
-            print("⚠️  Environment Validation Complete - Some warnings present")
+            print("  Environment Validation Complete - Some warnings present")
         print("=" * 80 + "\n")
         
         return is_valid
@@ -342,7 +342,7 @@ class EnvValidator:
     def print_env_summary():
         """Print a summary of current environment configuration (without sensitive data)."""
         print("\n" + "=" * 80)
-        print("📊 Current Environment Configuration")
+        print(" Current Environment Configuration")
         print("=" * 80)
         
         safe_vars = {
@@ -375,3 +375,5 @@ def validate_environment(env_file: str = ".env", strict: bool = True) -> bool:
         True if validation passed
     """
     return EnvValidator.validate_all(env_file, strict)
+
+
