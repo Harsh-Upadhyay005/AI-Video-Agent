@@ -117,7 +117,7 @@ class LoggerConfig:
         for key in sensitive_keys:
             # Simple regex-based redaction
             import re
-            pattern = re.compile(f"({key}[\"']?\s*[:=]\s*[\"']?)([^\"',\\s]+)", re.IGNORECASE)
+            pattern = re.compile(rf"({key}[\"']?\s*[:=]\s*[\"']?)([^\"',\s]+)", re.IGNORECASE)
             sanitized = pattern.sub(r"\1***REDACTED***", sanitized)
         
         return sanitized
