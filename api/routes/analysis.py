@@ -3,9 +3,13 @@ Video/Audio analysis endpoints.
 """
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional, Dict, Any
 from enum import Enum
+import asyncio
+import json
+import uuid
 
 from core.validators import InputValidator
 from core.logger import get_logger
@@ -15,6 +19,9 @@ from main import run_pipeline
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+# Store for progress updates (in production, use Redis or database)
+progress_store = {}
 
 
 class LanguageEnum(str, Enum):
@@ -57,12 +64,12 @@ class AnalysisResult(BaseModel):
 @router.post("/analyze", response_model=AnalysisResponse)
 async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTasks):
     """
-    Analyze a video or audio file.
+    Analyze a video or audio file asynchronously with real-time progress.
     
     - **source**: YouTube URL or local file path
     - **language**: Language for transcription (english or hinglish)
     
-    Returns a job ID for tracking the analysis progress.
+    Returns a job ID. Use /progress/{job_id} to get real-time progress updates.
     """
     try:
         # Validate source input
@@ -72,22 +79,25 @@ async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTa
         logger.info(f"Starting analysis: source_type={source_type}, language={language}")
         
         # Generate job ID
-        import uuid
         job_id = str(uuid.uuid4())
         
-        # In a production system, you would:
-        # 1. Store the job in a database
-        # 2. Use a task queue (Celery, RQ, etc.)
-        # 3. Return the job ID immediately
-        # 4. Process asynchronously
+        # Initialize progress
+        progress_store[job_id] = {
+            "status": "starting",
+            "stage": "initialization",
+            "progress": 0,
+            "message": "Starting analysis...",
+            "result": None,
+            "error": None
+        }
         
-        # For now, we'll process synchronously but return immediately
-        background_tasks.add_task(process_analysis, job_id, validated_source, language)
+        # Start processing in background
+        background_tasks.add_task(process_analysis_with_progress, job_id, validated_source, language)
         
         return {
             "job_id": job_id,
             "status": "processing",
-            "message": "Analysis started. Use /status/{job_id} to check progress."
+            "message": f"Analysis started. Stream progress at /progress/{job_id}"
         }
         
     except ValidationError as e:
@@ -98,30 +108,104 @@ async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTa
         raise HTTPException(status_code=500, detail="Failed to start analysis")
 
 
-async def process_analysis(job_id: str, source: str, language: str):
+async def process_analysis_with_progress(job_id: str, source: str, language: str):
     """
-    Process the analysis in the background.
+    Process the analysis with real-time progress updates.
     
     Args:
         job_id: Unique job identifier
         source: Validated source path/URL
         language: Validated language
     """
+    def update_progress(stage: str, message: str, progress: int = None):
+        """Update progress in store."""
+        if job_id in progress_store:
+            progress_store[job_id].update({
+                "stage": stage,
+                "message": message,
+                "status": "processing"
+            })
+            if progress is not None:
+                progress_store[job_id]["progress"] = progress
+    
     try:
         logger.info(f"Processing job {job_id}: source={source}, language={language}")
         
-        # Run the pipeline
-        result = run_pipeline(source, language)
+        update_progress("downloading", "Downloading audio from URL...", 10)
         
-        # In production: Store result in database/cache with job_id
+        # Run the pipeline with progress callback
+        result = run_pipeline(source, language, progress_callback=update_progress)
+        
+        # Store result
+        progress_store[job_id].update({
+            "status": "completed",
+            "stage": "done",
+            "progress": 100,
+            "message": "Analysis complete!",
+            "result": result
+        })
+        
         logger.info(f"Job {job_id} completed successfully")
-        
-        return result
         
     except Exception as e:
         logger.error(f"Job {job_id} failed: {str(e)}", exc_info=True)
-        # In production: Update job status in database
-        raise
+        progress_store[job_id].update({
+            "status": "failed",
+            "stage": "error",
+            "message": str(e),
+            "error": str(e)
+        })
+
+
+@router.get("/progress/{job_id}")
+async def stream_progress(job_id: str):
+    """
+    Stream real-time progress updates for an analysis job using Server-Sent Events (SSE).
+    
+    - **job_id**: The job ID returned from /analyze endpoint
+    
+    Returns a stream of progress updates.
+    """
+    async def event_generator():
+        """Generate SSE events."""
+        if job_id not in progress_store:
+            yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
+            return
+        
+        last_progress = -1
+        
+        while True:
+            if job_id not in progress_store:
+                break
+            
+            progress_data = progress_store[job_id]
+            current_progress = progress_data.get("progress", 0)
+            
+            # Send update if progress changed or status is completed/failed
+            if current_progress != last_progress or progress_data["status"] in ["completed", "failed"]:
+                yield f"data: {json.dumps(progress_data)}\n\n"
+                last_progress = current_progress
+            
+            # Stop streaming if completed or failed
+            if progress_data["status"] in ["completed", "failed"]:
+                break
+            
+            await asyncio.sleep(0.5)  # Poll every 500ms
+        
+        # Clean up after completion
+        if job_id in progress_store and progress_store[job_id]["status"] in ["completed", "failed"]:
+            await asyncio.sleep(5)  # Keep result for 5 seconds
+            progress_store.pop(job_id, None)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 
 @router.get("/status/{job_id}")
