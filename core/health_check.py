@@ -34,9 +34,9 @@ class HealthCheck:
         current_version = sys.version_info[:2]
         
         if current_version >= required_version:
-            return True, f"✅ Python {current_version[0]}.{current_version[1]}"
+            return True, f"[okay] Python {current_version[0]}.{current_version[1]}"
         else:
-            return False, f"❌ Python {current_version[0]}.{current_version[1]} (requires >= {required_version[0]}.{required_version[1]})"
+            return False, f"[wrong] Python {current_version[0]}.{current_version[1]} (requires >= {required_version[0]}.{required_version[1]})"
     
     @staticmethod
     def check_ffmpeg() -> Tuple[bool, str]:
@@ -58,14 +58,14 @@ class HealthCheck:
             if result.returncode == 0:
                 # Extract version from first line
                 version_line = result.stdout.split('\n')[0]
-                return True, f"✅ FFmpeg installed: {version_line}"
+                return True, f"[okay] FFmpeg installed: {version_line}"
             else:
-                return False, "❌ FFmpeg found but returned error"
+                return False, "[wrong] FFmpeg found but returned error"
                 
         except FileNotFoundError:
-            return False, "❌ FFmpeg not found in PATH"
+            return False, "[wrong] FFmpeg not found in PATH"
         except Exception as e:
-            return False, f"❌ FFmpeg check failed: {str(e)}"
+            return False, f"[wrong] FFmpeg check failed: {str(e)}"
     
     @staticmethod
     def check_disk_space(required_gb: float = 1.0) -> Tuple[bool, str]:
@@ -85,12 +85,12 @@ class HealthCheck:
             free_gb = stat.free / (1024 ** 3)
             
             if free_gb >= required_gb:
-                return True, f"✅ Disk space: {free_gb:.2f} GB available"
+                return True, f"[okay] Disk space: {free_gb:.2f} GB available"
             else:
-                return False, f"⚠️  Low disk space: {free_gb:.2f} GB (recommended: {required_gb} GB)"
+                return False, f"[warning]  Low disk space: {free_gb:.2f} GB (recommended: {required_gb} GB)"
                 
         except Exception as e:
-            return False, f"❌ Disk space check failed: {str(e)}"
+            return False, f"[wrong] Disk space check failed: {str(e)}"
     
     @staticmethod
     def check_directories() -> Tuple[bool, str]:
@@ -119,9 +119,9 @@ class HealthCheck:
                 issues.append(f"{dir_name}: {str(e)}")
         
         if not issues:
-            return True, f"✅ Directories: {', '.join(required_dirs)} are writable"
+            return True, f"[okay] Directories: {', '.join(required_dirs)} are writable"
         else:
-            return False, f"❌ Directory issues: {'; '.join(issues)}"
+            return False, f"[wrong] Directory issues: {'; '.join(issues)}"
     
     @staticmethod
     def check_environment_variables() -> Tuple[bool, str]:
@@ -143,12 +143,12 @@ class HealthCheck:
             if os.getenv('SARVAM_API_KEY'):
                 optional_set.append('SARVAM_API_KEY')
             
-            msg = "✅ Required environment variables set"
+            msg = "[okay] Required environment variables set"
             if optional_set:
                 msg += f" (+ optional: {', '.join(optional_set)})"
             return True, msg
         else:
-            return False, f"❌ Missing environment variables: {', '.join(missing_vars)}"
+            return False, f"[wrong] Missing environment variables: {', '.join(missing_vars)}"
     
     @staticmethod
     def check_mistral_api() -> Tuple[bool, str]:
@@ -161,7 +161,7 @@ class HealthCheck:
         api_key = os.getenv('MISTRAL_API_KEY')
         
         if not api_key:
-            return False, "❌ MISTRAL_API_KEY not set"
+            return False, "[wrong] MISTRAL_API_KEY not set"
         
         try:
             from langchain_mistralai import ChatMistralAI
@@ -176,18 +176,18 @@ class HealthCheck:
             # Make a minimal test call
             response = llm.invoke("test")
             
-            return True, "✅ Mistral API: Connected and authenticated"
+            return True, "[okay] Mistral API: Connected and authenticated"
             
         except Exception as e:
             error_msg = str(e)
             if "401" in error_msg or "unauthorized" in error_msg.lower():
-                return False, "❌ Mistral API: Invalid API key"
+                return False, "[wrong] Mistral API: Invalid API key"
             elif "429" in error_msg or "rate limit" in error_msg.lower():
-                return False, "⚠️  Mistral API: Rate limit reached"
+                return False, "[warning]  Mistral API: Rate limit reached"
             elif "timeout" in error_msg.lower():
-                return False, "⚠️  Mistral API: Connection timeout"
+                return False, "[warning]  Mistral API: Connection timeout"
             else:
-                return False, f"❌ Mistral API: {error_msg[:100]}"
+                return False, f"[wrong] Mistral API: {error_msg[:100]}"
     
     @staticmethod
     def check_sarvam_api() -> Tuple[bool, str]:
@@ -200,7 +200,7 @@ class HealthCheck:
         api_key = os.getenv('SARVAM_API_KEY')
         
         if not api_key:
-            return True, "ℹ️  Sarvam API: Not configured (optional for English-only)"
+            return True, "  Sarvam API: Not configured (optional for English-only)"
         
         try:
             # Simple connectivity test
@@ -213,16 +213,16 @@ class HealthCheck:
             
             # Even if endpoint doesn't exist, we check authentication
             if response.status_code == 401:
-                return False, "❌ Sarvam API: Invalid API key"
+                return False, "[wrong] Sarvam API: Invalid API key"
             else:
-                return True, "✅ Sarvam API: API key configured"
+                return True, "[okay] Sarvam API: API key configured"
                 
         except requests.exceptions.Timeout:
-            return False, "⚠️  Sarvam API: Connection timeout"
+            return False, "[warning]  Sarvam API: Connection timeout"
         except requests.exceptions.ConnectionError:
-            return False, "⚠️  Sarvam API: Cannot connect"
+            return False, "[warning]  Sarvam API: Cannot connect"
         except Exception as e:
-            return False, f"❌ Sarvam API: {str(e)[:100]}"
+            return False, f"[wrong] Sarvam API: {str(e)[:100]}"
     
     @staticmethod
     def check_whisper_model() -> Tuple[bool, str]:
@@ -239,16 +239,16 @@ class HealthCheck:
             # Check if model is valid
             valid_models = whisper.available_models()
             if model_name not in valid_models:
-                return False, f"❌ Whisper: Invalid model '{model_name}'"
+                return False, f"[wrong] Whisper: Invalid model '{model_name}'"
             
             # Try to load model (this will download if needed)
             # For health check, we just verify it's accessible
-            return True, f"✅ Whisper: Model '{model_name}' is available"
+            return True, f"[okay] Whisper: Model '{model_name}' is available"
             
         except ImportError:
-            return False, "❌ Whisper: Package not installed"
+            return False, "[wrong] Whisper: Package not installed"
         except Exception as e:
-            return False, f"❌ Whisper: {str(e)[:100]}"
+            return False, f"[wrong] Whisper: {str(e)[:100]}"
     
     @staticmethod
     def check_embedding_model() -> Tuple[bool, str]:
@@ -259,7 +259,7 @@ class HealthCheck:
             Tuple of (is_healthy, message)
         """
         try:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
+            from langchain_huggingface import HuggingFaceEmbeddings
             
             model_name = os.getenv('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
             
@@ -273,14 +273,14 @@ class HealthCheck:
             test_embedding = embeddings.embed_query("test")
             
             if test_embedding and len(test_embedding) > 0:
-                return True, f"✅ Embeddings: Model '{model_name}' ready"
+                return True, f"[okay] Embeddings: Model '{model_name}' ready"
             else:
-                return False, "❌ Embeddings: Model returned invalid output"
+                return False, "[wrong] Embeddings: Model returned invalid output"
                 
         except ImportError:
-            return False, "❌ Embeddings: Required packages not installed"
+            return False, "[wrong] Embeddings: Required packages not installed"
         except Exception as e:
-            return False, f"❌ Embeddings: {str(e)[:100]}"
+            return False, f"[wrong] Embeddings: {str(e)[:100]}"
     
     @staticmethod
     def check_vector_store() -> Tuple[bool, str]:
@@ -303,12 +303,12 @@ class HealthCheck:
             # Try to initialize client
             client = chromadb.PersistentClient(path=str(db_path))
             
-            return True, f"✅ Vector Store: ChromaDB accessible at '{db_dir}'"
+            return True, f"[okay] Vector Store: ChromaDB accessible at '{db_dir}'"
             
         except ImportError:
-            return False, "❌ Vector Store: ChromaDB not installed"
+            return False, "[wrong] Vector Store: ChromaDB not installed"
         except Exception as e:
-            return False, f"❌ Vector Store: {str(e)[:100]}"
+            return False, f"[wrong] Vector Store: {str(e)[:100]}"
     
     @staticmethod
     def run_all_checks(skip_api_checks: bool = False) -> Dict[str, any]:
@@ -357,9 +357,9 @@ class HealthCheck:
                     fut = ex.submit(fn)
                     return fut.result(timeout=timeout)
             except concurrent.futures.TimeoutError:
-                return False, f"⚠️ Health check timed out after {timeout}s"
+                return False, f"[warning] Health check timed out after {timeout}s"
             except Exception as e:
-                return False, f"❌ Check raised exception: {str(e)[:200]}"
+                return False, f"[wrong] Check raised exception: {str(e)[:200]}"
 
         # Run all checks
         for check_name, check_func in all_checks:
@@ -376,7 +376,7 @@ class HealthCheck:
                 }
 
                 if not is_healthy:
-                    if "⚠️" in message or "timed out" in message:
+                    if "[warning]" in message or "timed out" in message:
                         checks["warnings"].append(f"{check_name}: {message}")
                     else:
                         checks["errors"].append(f"{check_name}: {message}")
@@ -386,19 +386,19 @@ class HealthCheck:
                 logger.error(f"Health check '{check_name}' raised exception: {str(e)}")
                 checks["checks"][check_name] = {
                     "status": "error",
-                    "message": f"❌ Check failed: {str(e)}"
+                    "message": f"[wrong] Check failed: {str(e)}"
                 }
                 checks["errors"].append(f"{check_name}: {str(e)}")
                 checks["overall_status"] = "unhealthy"
         
         # Log summary
         if checks["overall_status"] == "healthy":
-            logger.info("✅ Health check passed - All systems operational")
+            logger.info("[okay] Health check passed - All systems operational")
         else:
-            logger.error(f"❌ Health check failed - {len(checks['errors'])} error(s)")
+            logger.error(f"[warning] Health check failed - {len(checks['errors'])} error(s)")
         
         if checks["warnings"]:
-            logger.warning(f"⚠️  Health check warnings: {len(checks['warnings'])} warning(s)")
+            logger.warning(f"[warning]  Health check warnings: {len(checks['warnings'])} warning(s)")
         
         return checks
     
@@ -411,7 +411,7 @@ class HealthCheck:
             checks: Health check results dictionary
         """
         print("\n" + "=" * 80)
-        print("🏥 AI Video Agent - Health Check Report")
+        print(" AI Video Agent - Health Check Report")
         print("=" * 80)
         print(f"Timestamp: {checks['timestamp']}")
         print(f"Overall Status: {checks['overall_status'].upper()}")
@@ -425,21 +425,21 @@ class HealthCheck:
         print("\n" + "=" * 80)
         
         if checks["errors"]:
-            print(f"❌ Errors ({len(checks['errors'])}):")
+            print(f" Errors ({len(checks['errors'])}):")
             for error in checks["errors"]:
                 print(f"   - {error}")
             print()
         
         if checks["warnings"]:
-            print(f"⚠️  Warnings ({len(checks['warnings'])}):")
+            print(f"  Warnings ({len(checks['warnings'])}):")
             for warning in checks["warnings"]:
                 print(f"   - {warning}")
             print()
         
         if checks["overall_status"] == "healthy":
-            print("✅ System is ready for operation")
+            print("[okay] System is ready for operation")
         else:
-            print("❌ System has issues that need to be resolved")
+            print("[wrong] System has issues that need to be resolved")
         
         print("=" * 80 + "\n")
 
@@ -461,3 +461,5 @@ def perform_health_check(skip_api_checks: bool = False, print_report: bool = Tru
         HealthCheck.print_health_report(checks)
     
     return checks["overall_status"] == "healthy"
+
+
