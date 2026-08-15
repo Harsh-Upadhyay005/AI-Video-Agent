@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("=" * 80)
-    logger.info("🚀 AI Video Agent API Starting...")
+    logger.info("AI Video Agent API Starting...")
     logger.info("=" * 80)
     
     try:
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
         perform_security_check()
         
         logger.info("=" * 80)
-        logger.info("[okay] AI Video Agent API Ready")
+        logger.info("[OK] AI Video Agent API Ready")
         logger.info("=" * 80)
         
     except Exception as e:
@@ -68,12 +68,12 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("=" * 80)
-    logger.info("[alert] AI Video Agent API Shutting Down...")
+    logger.info("[SHUTDOWN] AI Video Agent API Shutting Down...")
     logger.info("=" * 80)
     
     try:
         cleanup_on_shutdown()
-        logger.info("[okay] Shutdown complete")
+        logger.info("[OK] Shutdown complete")
     except Exception as e:
         logger.error(f"Error during shutdown: {str(e)}")
 
@@ -114,7 +114,7 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     
     # Log request
-    logger.info(f"→ {request.method} {request.url.path}")
+    logger.info(f" {request.method} {request.url.path}")
     
     try:
         response = await call_next(request)
@@ -122,7 +122,7 @@ async def log_requests(request: Request, call_next):
         # Log response
         process_time = time.time() - start_time
         logger.info(
-            f"← {request.method} {request.url.path} "
+            f" {request.method} {request.url.path} "
             f"Status: {response.status_code} "
             f"Duration: {process_time:.3f}s"
         )
@@ -135,7 +135,7 @@ async def log_requests(request: Request, call_next):
     except Exception as e:
         process_time = time.time() - start_time
         logger.error(
-            f"← {request.method} {request.url.path} "
+            f" {request.method} {request.url.path} "
             f"Error: {str(e)} "
             f"Duration: {process_time:.3f}s"
         )
@@ -189,8 +189,9 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include Routers
 # =============================================================================
 
-# Include health routes both at root and /api/v1 for compatibility
+# Include health routes at multiple paths for compatibility
 app.include_router(health.router, tags=["Health"])  # /health (root level)
+app.include_router(health.router, prefix="/api", tags=["Health"])  # /api/health
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])  # /api/v1/health
 app.include_router(analysis.router, prefix="/api/v1", tags=["Analysis"])
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
