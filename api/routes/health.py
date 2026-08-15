@@ -80,3 +80,12 @@ async def liveness_check():
     Returns 200 if service is alive (even if temporarily unavailable).
     """
     return {"status": "alive"}
+
+
+@router.get("/health/ping")
+async def ping_check():
+    """
+    Simple ping endpoint for frontend health checks.
+    Returns 200 if backend is responsive.
+    """
+    return {"status": "ok", "message": "pong"}
