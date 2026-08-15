@@ -14,7 +14,7 @@ import uuid
 from core.validators import InputValidator
 from core.logger import get_logger
 from core.exceptions import ValidationError
-from main import run_pipeline
+from main import run_pipeline, get_rag_chain_for_source
 
 logger = get_logger(__name__)
 
@@ -134,19 +134,42 @@ async def process_analysis_with_progress(job_id: str, source: str, language: str
         update_progress("downloading", "Downloading audio from URL...", 10)
         
         # Run the pipeline with progress callback
-        result = run_pipeline(source, language, progress_callback=update_progress)
+        # Note: Pipeline internally stores RAG chain using the source_key parameter
+        result = run_pipeline(source, language, progress_callback=update_progress, source_key=job_id)
         
-        # Store result
+        # Ensure result contains only JSON-serializable data
+        # Filter out any non-serializable objects (defense in depth)
+        json_safe_result = {
+            "title": result.get("title", ""),
+            "transcript": result.get("transcript", ""),
+            "summary": result.get("summary", ""),
+            "action_items": result.get("action_items", ""),
+            "key_decisions": result.get("key_decisions", ""),
+            "open_questions": result.get("open_questions", ""),
+            "job_id": job_id  # Include job_id so frontend can use it for chat
+        }
+        
+        # Store result (guaranteed JSON-serializable)
         progress_store[job_id].update({
             "status": "completed",
             "stage": "done",
             "progress": 100,
             "message": "Analysis complete!",
-            "result": result
+            "result": json_safe_result
         })
         
         logger.info(f"Job {job_id} completed successfully")
         
+    except ValueError as e:
+        # Handle empty transcript or validation errors
+        logger.error(f"Job {job_id} validation failed: {str(e)}", exc_info=True)
+        progress_store[job_id].update({
+            "status": "failed",
+            "stage": "error",
+            "progress": 0,
+            "message": str(e),
+            "error": str(e)
+        })
     except Exception as e:
         logger.error(f"Job {job_id} failed: {str(e)}", exc_info=True)
         progress_store[job_id].update({
@@ -183,6 +206,13 @@ async def stream_progress(job_id: str):
             
             # Send update if progress changed or status is completed/failed
             if current_progress != last_progress or progress_data["status"] in ["completed", "failed"]:
+                # progress_data contains only JSON-serializable fields:
+                # - status (str)
+                # - stage (str)
+                # - progress (int)
+                # - message (str)
+                # - result (dict with strings only, no LangChain objects)
+                # - error (str or None)
                 yield f"data: {json.dumps(progress_data)}\n\n"
                 last_progress = current_progress
             
@@ -233,7 +263,7 @@ async def analyze_video_sync(request: AnalysisRequest):
     Synchronously analyze a video or audio file.
     
     ⚠️ WARNING: This endpoint blocks until analysis is complete.
-    Only use for small files or testing. Use /analyze for production.
+    Only use for turbo files or testing. Use /analyze for production.
     
     - **source**: YouTube URL or local file path
     - **language**: Language for transcription (english or hinglish)
@@ -265,3 +295,5 @@ async def analyze_video_sync(request: AnalysisRequest):
     except Exception as e:
         logger.error(f"Analysis error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Analysis failed")
+
+
