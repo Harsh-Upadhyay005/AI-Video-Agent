@@ -227,7 +227,7 @@ class HealthCheck:
     @staticmethod
     def check_whisper_model() -> Tuple[bool, str]:
         """
-        Check if Whisper can be initialized.
+        Check if OpenAI Whisper can be initialized.
         
         Returns:
             Tuple of (is_healthy, message)
@@ -236,17 +236,20 @@ class HealthCheck:
             import whisper
             model_name = os.getenv('WHISPER_MODEL', 'small')
             
-            # Check if model is valid
-            valid_models = whisper.available_models()
-            if model_name not in valid_models:
-                return False, f"[wrong] Whisper: Invalid model '{model_name}'"
+            # Check if model name is valid for openai-whisper
+            valid_models = [
+                "tiny", "tiny.en", "base", "base.en", "small", "small.en",
+                "medium", "medium.en", "large-v1", "large-v2", "large-v3", "large"
+            ]
             
-            # Try to load model (this will download if needed)
-            # For health check, we just verify it's accessible
-            return True, f"[okay] Whisper: Model '{model_name}' is available"
+            if model_name not in valid_models:
+                return False, f"[wrong] Whisper: Invalid model '{model_name}'. Valid: {', '.join(valid_models)}"
+            
+            # Model will be downloaded on first use, so just verify package is available
+            return True, f"[okay] Whisper: openai-whisper ready with model '{model_name}'"
             
         except ImportError:
-            return False, "[wrong] Whisper: Package not installed"
+            return False, "[wrong] Whisper: openai-whisper package not installed"
         except Exception as e:
             return False, f"[wrong] Whisper: {str(e)[:100]}"
     
