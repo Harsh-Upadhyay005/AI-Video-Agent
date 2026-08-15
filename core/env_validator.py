@@ -49,7 +49,7 @@ class EnvValidator:
             "description": "Whisper model size",
             "validation": lambda v: v in ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
             "error": "Must be one of: tiny, base, small, medium, large, large-v2, large-v3",
-            "default": "small"
+            "default": "large-v3"
         }
     }
     
