@@ -5,6 +5,10 @@ import torch
 from pydub import AudioSegment
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Sarvam's sync STT-translate API rejects audio longer than 30s.
 # We slice each chunk into 25s pieces (with a 5s safety margin) before sending.
@@ -28,16 +32,18 @@ def load_model():
     return _model
 
 
-def transcribe_chunk_whisper(chunk_path: str, progress_callback: Optional[Callable] = None) -> str:
+def transcribe_chunk_whisper(chunk_path: str, progress_callback: Optional[Callable] = None, return_segments: bool = False):
     """
     Transcribe a single audio chunk using OpenAI Whisper.
     
     Args:
         chunk_path: Path to the audio chunk
         progress_callback: Optional callback for progress updates
+        return_segments: If True, return segments with timestamps; if False, return text only
     
     Returns:
-        Transcribed text
+        If return_segments=False: Transcribed text string
+        If return_segments=True: Dict with 'text' and 'segments' (list of {text, start, end})
     """
     model = load_model()
     
@@ -46,9 +52,27 @@ def transcribe_chunk_whisper(chunk_path: str, progress_callback: Optional[Callab
     
     try:
         result = model.transcribe(chunk_path)
-        return result["text"]
+        
+        if return_segments and "segments" in result:
+            # Return structured data with timestamps
+            return {
+                "text": result["text"],
+                "segments": [
+                    {
+                        "text": seg.get("text", ""),
+                        "start": seg.get("start", 0.0),
+                        "end": seg.get("end", 0.0)
+                    }
+                    for seg in result.get("segments", [])
+                ]
+            }
+        else:
+            # Backward compatible: return text only
+            return result["text"]
     except Exception as e:
         print(f"[Whisper] Error transcribing {chunk_path}: {e}")
+        if return_segments:
+            return {"text": "", "segments": []}
         return ""
 
 
