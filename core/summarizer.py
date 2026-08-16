@@ -59,7 +59,9 @@ def summarize(transcript: str) -> str:
             (
                 "system",
                 "You are an expert meeting summarizer. Combine these partial summaries "
-                "into one final professional meeting summary in bullet points.",
+                "into one final professional meeting summary. Write 2-4 concise paragraphs "
+                "in plain text (no markdown, no bullet points, no special formatting). "
+                "Keep it short and conversational.",
             ),
             ("human", "{text}"),
         ]
