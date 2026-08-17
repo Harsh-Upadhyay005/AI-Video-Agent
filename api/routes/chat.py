@@ -21,12 +21,14 @@ class ChatRequest(BaseModel):
     """Request model for chat queries."""
     question: str = Field(..., description="Question to ask about the transcript", min_length=3, max_length=1000)
     session_id: Optional[str] = Field(None, description="Optional session/job ID for retrieving the right RAG chain")
+    debug: bool = Field(False, description="Enable debug mode for query routing details")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "question": "What were the main decisions made in the meeting?",
-                "session_id": "abc123-job-id"
+                "session_id": "abc123-job-id",
+                "debug": False
             }
         }
 
@@ -74,7 +76,7 @@ async def chat_with_transcript(request: ChatRequest):
             )
         
         # Get answer
-        answer = ask_question(rag_chain, validated_question)
+        answer = ask_question(rag_chain, validated_question, debug=request.debug)
         
         return {
             "answer": answer,
