@@ -46,10 +46,11 @@ class QueryClassifier:
     # Keywords for rule-based classification
     GLOBAL_KEYWORDS = [
         r'\b(all|entire|complete|whole|overall)\b.*\b(video|content|discussion|transcript|meeting)\b',
-        r'\b(summarize|summary)\b.*\b(video|entire|complete|whole|everything)\b',
+        r'\b(summarize|summary)\b',  # Simplified to catch all summarize requests
         r'\bwhat\s+(is|was|are|were)\s+(this|the)\s+(video|meeting|discussion)\s+about\b',
         r'\bmain\s+(point|points|idea|ideas|takeaway|takeaways)\b',
-        r'\bkey\s+(takeaway|takeaways|point|points|concept|concepts|insight|insights)\b.*\b(from|in|of)\s+(video|meeting|discussion|transcript)\b'
+        r'\bkey\s+(takeaway|takeaways|point|points)\b',
+        r'\b(give me|provide)\s+(a\s+)?(summary|overview)\b'
     ]
     
     TOPIC_EXTRACTION_KEYWORDS = [
