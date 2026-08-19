@@ -55,7 +55,7 @@ function Content({ onNavigateToStudio }: ContentProps) {
       </h1>
 
       <p className="mt-6 max-w-xl text-base leading-relaxed text-[#1A1A1A]/80 sm:text-lg">
-        Turn lectures, meetings, and YouTube videos into transcription logs, clean summaries, and interactive RAG-powered Q&A. Navigate directly to timestamps and speakers instantly.
+        Transform YouTube videos, MP3 audio files, and MP4 recordings into clean transcripts, executive summaries, and interactive RAG-powered Q&A. Upload any media file or paste a link—then chat with your content instantly.
       </p>
 
       <div className="mt-8 flex flex-col items-center gap-3">
@@ -69,7 +69,7 @@ function Content({ onNavigateToStudio }: ContentProps) {
           <span>Launch Video Studio</span>
         </button>
         <p className="text-xs text-[#8A8A8A] font-medium tracking-wide">
-          Supports YouTube Links • MP4/MP3 Uploads • Hinglish Translation
+          YouTube URLs • MP3/MP4/WAV Uploads • Drag & Drop • 12 Formats • Hinglish Support
         </p>
       </div>
     </div>
