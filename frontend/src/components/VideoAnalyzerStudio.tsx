@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Video,
   Play,
@@ -11,7 +11,11 @@ import {
   Search,
   Copy,
   Check,
-  RefreshCw
+  RefreshCw,
+  Upload,
+  Music,
+  Film,
+  X
 } from "lucide-react";
 
 export interface AnalysisData {
@@ -100,6 +104,16 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
   const [analysisResult, setAnalysisResult] = useState<AnalysisData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [copied, setCopied] = useState(false);
+  const [inputMode, setInputMode] = useState<"url" | "file">("url");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const runSimulatedProgress = (presetResult: AnalysisData) => {
     setIsProcessing(true);
@@ -134,8 +148,8 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
     }, 600);
   };
 
-  const startAnalysis = async (targetSource: string) => {
-    if (!targetSource.trim()) return;
+  const startAnalysis = async (targetSource: string, uploadFile?: File) => {
+    if (!targetSource.trim() && !uploadFile) return;
 
     // Check if input matches any preset or custom source
     const matchedPreset = SAMPLE_PRESETS.find(p => targetSource.toLowerCase().includes(p.url.toLowerCase()) || targetSource.toLowerCase().includes(p.name.toLowerCase()));
@@ -149,14 +163,31 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
     setIsProcessing(true);
     setProgressPercent(10);
     setProgressStage("Initializing");
-    setProgressMessage("Sending request to FastAPI backend...");
+    setUploadError(null);
 
     try {
-      const response = await fetch("http://localhost:8000/api/v1/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: targetSource.trim(), language })
-      });
+      let response: Response;
+
+      if (uploadFile) {
+        // File upload path
+        setProgressMessage("Uploading file to backend...");
+        const formData = new FormData();
+        formData.append("file", uploadFile);
+        formData.append("language", language);
+
+        response = await fetch("http://localhost:8000/api/v1/upload", {
+          method: "POST",
+          body: formData
+        });
+      } else {
+        // YouTube URL path
+        setProgressMessage("Sending request to FastAPI backend...");
+        response = await fetch("http://localhost:8000/api/v1/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: targetSource.trim(), language })
+        });
+      }
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({ detail: "API returned an error" }));
@@ -238,7 +269,71 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
 
   const handleAnalyzeSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    startAnalysis(source);
+    
+    if (inputMode === "file" && selectedFile) {
+      startAnalysis("", selectedFile);
+    } else if (inputMode === "url" && source.trim()) {
+      startAnalysis(source);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      validateAndSetFile(file);
+    }
+  };
+
+  const validateAndSetFile = (file: File) => {
+    const validExtensions = ['.mp3', '.mp4', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.avi', '.mov', '.mkv', '.webm', '.flv', '.pdf'];
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    
+    if (!validExtensions.includes(fileExt)) {
+      setUploadError(`Unsupported file type: ${fileExt}. Supported formats: MP3, MP4, WAV, M4A, FLAC, OGG, AAC, AVI, MOV, MKV, WebM, FLV, PDF`);
+      return;
+    }
+
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    if (file.size > maxSize) {
+      setUploadError(`File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB. Maximum: 500MB`);
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploadError(null);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      validateAndSetFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleBrowseClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const handlePresetSelect = (preset: typeof SAMPLE_PRESETS[0]) => {
@@ -276,21 +371,144 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
 
         {/* Input Card */}
         <div className="p-6 sm:p-8 rounded-3xl border-2 border-[#1A1A1A] bg-white shadow-xl mb-10">
+          {/* Input Mode Toggle */}
+          <div className="flex gap-2 mb-6 p-1 bg-[#FDFCF0] rounded-xl border border-[#1A1A1A]/10">
+            <button
+              type="button"
+              onClick={() => {
+                setInputMode("url");
+                setSelectedFile(null);
+                setUploadError(null);
+              }}
+              disabled={isProcessing}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                inputMode === "url"
+                  ? "bg-[#1A1A1A] text-white shadow-sm"
+                  : "text-[#8A8A8A] hover:text-[#1A1A1A]"
+              }`}
+            >
+              <Youtube className="w-4 h-4" />
+              YouTube URL
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInputMode("file");
+                setSource("");
+                setUploadError(null);
+              }}
+              disabled={isProcessing}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                inputMode === "file"
+                  ? "bg-[#1A1A1A] text-white shadow-sm"
+                  : "text-[#8A8A8A] hover:text-[#1A1A1A]"
+              }`}
+            >
+              <Upload className="w-4 h-4" />
+              Upload File
+            </button>
+          </div>
+
           <form onSubmit={handleAnalyzeSubmit} className="space-y-4">
             <div className="flex flex-col md:flex-row gap-3">
-              {/* URL/Source Input */}
-              <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Youtube className="w-5 h-5 text-red-600" />
+              {inputMode === "url" ? (
+                /* URL Input Mode */
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Youtube className="w-5 h-5 text-red-600" />
+                  </div>
+                  <input
+                    type="text"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    placeholder="Paste YouTube video link (e.g. https://www.youtube.com/watch?v=...)"
+                    className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-[#1A1A1A]/20 bg-[#FDFCF0]/50 text-sm text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] focus:border-[#1A1A1A]"
+                    disabled={isProcessing}
+                  />
                 </div>
-                <input
-                  type="text"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                  placeholder="Paste YouTube video link (e.g. https://www.youtube.com/watch?v=...)"
-                  className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-[#1A1A1A]/20 bg-[#FDFCF0]/50 text-sm text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] focus:border-[#1A1A1A]"
-                />
-              </div>
+              ) : (
+                /* File Upload Mode */
+                <div className="flex-1">
+                  <div
+                    className={`relative border-2 border-dashed rounded-xl transition-all ${
+                      dragActive
+                        ? "border-[#D9CCF5] bg-[#D9CCF5]/10"
+                        : selectedFile
+                        ? "border-emerald-500 bg-emerald-50"
+                        : "border-[#1A1A1A]/20 bg-[#FDFCF0]/50"
+                    }`}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".mp3,.mp4,.wav,.m4a,.flac,.ogg,.aac,.avi,.mov,.mkv,.webm,.flv,.pdf"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      disabled={isProcessing}
+                    />
+                    
+                    {selectedFile ? (
+                      <div className="flex items-center gap-3 p-3">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
+                          {selectedFile.type.startsWith('audio/') ? (
+                            <Music className="w-5 h-5 text-emerald-600" />
+                          ) : selectedFile.type === 'application/pdf' ? (
+                            <FileText className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <Film className="w-5 h-5 text-emerald-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[#1A1A1A] truncate">
+                            {selectedFile.name}
+                          </p>
+                          <p className="text-xs text-[#8A8A8A]">
+                            {formatFileSize(selectedFile.size)}
+                          </p>
+                        </div>
+                        {!isProcessing && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFile(null);
+                              setUploadError(null);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <X className="w-4 h-4 text-red-600" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-6 text-center cursor-pointer" onClick={handleBrowseClick}>
+                        <Upload className="w-8 h-8 text-[#8A8A8A] mb-2" />
+                        <p className="text-sm font-semibold text-[#1A1A1A] mb-1">
+                          Drop file here or click to browse
+                        </p>
+                        <p className="text-xs text-[#8A8A8A]">
+                          Audio/Video: MP3, MP4, WAV, M4A, AVI, MOV, MKV, WebM
+                        </p>
+                        <p className="text-xs text-[#8A8A8A]">
+                          Documents: PDF
+                        </p>
+                        <p className="text-xs text-[#8A8A8A] mt-1">
+                          Max size: 500MB
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {uploadError && (
+                    <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+                      <X className="w-3 h-3" />
+                      {uploadError}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Language Selector */}
               <select
@@ -305,8 +523,12 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isProcessing || !source.trim()}
-                className="px-6 py-3.5 rounded-xl bg-[#1A1A1A] text-white font-semibold text-sm hover:bg-black transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                disabled={
+                  isProcessing ||
+                  (inputMode === "url" && !source.trim()) ||
+                  (inputMode === "file" && !selectedFile)
+                }
+                className="px-6 py-3.5 rounded-xl bg-[#1A1A1A] text-white font-semibold text-sm hover:bg-black transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isProcessing ? (
                   <>
@@ -314,7 +536,8 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 text-[#D9CCF5]" /> Run AI Pipeline
+                    <Sparkles className="w-4 h-4 text-[#D9CCF5]" /> 
+                    {inputMode === "file" ? "Analyze File" : "Run AI Pipeline"}
                   </>
                 )}
               </button>
@@ -394,7 +617,7 @@ export const VideoAnalyzerStudio: React.FC<VideoAnalyzerStudioProps> = ({
                     : "border-transparent text-[#8A8A8A] hover:text-[#1A1A1A]"
                 }`}
               >
-                <Sparkles className="w-4 h-4" /> Executive Summary
+                <Sparkles className="w-4 h-4" /> Summary
               </button>
               <button
                 onClick={() => setActiveTab("actions")}
