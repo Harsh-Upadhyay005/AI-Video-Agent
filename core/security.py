@@ -33,7 +33,7 @@ class SecretsManager:
     # Environment variable keys that contain sensitive data
     SENSITIVE_ENV_KEYS = {
         'MISTRAL_API_KEY',
-        'SARVAM_API_KEY',
+        'SARVAM_ANON_KEY',
         'API_KEY',
         'SECRET_KEY',
         'PASSWORD',
