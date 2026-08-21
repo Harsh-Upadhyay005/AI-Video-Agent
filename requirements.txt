@@ -1,43 +1,96 @@
+# =============================================================================
+# AI Video Agent - Production Requirements
+# =============================================================================
+# Python 3.8+ required
+# Last updated: 2026
+# =============================================================================
 
-# ── Audio / Video acquisition ─────────────────────────────────────────────────
-yt-dlp>=2024.4.9                  # Download audio from YouTube URLs
-pydub>=0.25.1                     # Audio file manipulation / format conversion
-ffmpeg-python>=0.2.0              # FFmpeg bindings (FFmpeg binary must be installed separately)
+# ── Core Framework ───────────────────────────────────────────────────────────
+# FastAPI for production-ready REST API
+fastapi==0.109.0                  # Modern, fast web framework
+uvicorn[standard]==0.27.0         # ASGI server with performance extras
+pydantic==2.5.3                   # Data validation and settings management
+pydantic-settings==2.1.0          # Settings management from environment
+python-multipart==0.0.9           # Required for file upload support in FastAPI
 
-# ── Speech-to-Text (local Whisper) ────────────────────────────────────────────
-openai-whisper>=20231117          # OpenAI Whisper (runs locally)
-torch>=2.2.0                      # PyTorch backend for Whisper
-torchaudio>=2.2.0     
-sarvam-ai            # Audio utilities for PyTorch
+# ── Audio / Video Processing ─────────────────────────────────────────────────
+yt-dlp==2024.4.9                  # Download audio from YouTube URLs
+pydub==0.25.1                     # Audio file manipulation / format conversion
+ffmpeg-python==0.2.0              # FFmpeg bindings (FFmpeg binary must be installed separately)
 
-# ── Translation (Hindi → English) ─────────────────────────────────────────────
-deep-translator>=1.11.4           # Lightweight translation wrapper (Google backend)
+# ── Speech-to-Text ───────────────────────────────────────────────────────────
+openai-whisper==20231117          # OpenAI Whisper for transcription
+torch==2.2.0                      # PyTorch backend for Whisper
+torchaudio==2.2.0                 # Audio utilities for PyTorch
+sarvam-ai==1.0.0                  # Sarvam AI for Hinglish transcription
 
-# ── LLM Orchestration — LangChain LCEL + Mistral ──────────────────────────────
-langchain>=0.2.0
-langchain-core>=0.2.0
-langchain-community>=0.2.0
-langchain-mistralai>=0.1.0        # LangChain wrapper for Mistral API
-mistralai>=0.4.0                  # Official Mistral Python client
+# ── Translation ──────────────────────────────────────────────────────────────
+deep-translator==1.11.4           # Lightweight translation wrapper
 
-# ── RAG Pipeline ──────────────────────────────────────────────────────────────
-chromadb>=0.5.0                   # Local vector store
-sentence-transformers>=3.0.0      # HuggingFace embedding models
-langchain-huggingface>=0.0.3      # LangChain ↔ HuggingFace embeddings bridge
-huggingface-hub>=0.23.0           # Model downloading from HuggingFace Hub
-tiktoken>=0.7.0                   # Token counting for text splitting
+# ── LLM & LangChain ──────────────────────────────────────────────────────────
+langchain==0.2.16                 # LangChain framework
+langchain-core==0.2.38            # LangChain core abstractions
+langchain-community==0.2.16       # Community integrations
+langchain-mistralai==0.1.12       # Mistral AI integration
+langchain-huggingface==0.0.3      # HuggingFace embeddings integration
+mistralai==0.4.2                  # Official Mistral Python client
 
-# ── Streamlit UI ──────────────────────────────────────────────────────────────
-streamlit>=1.35.0
-streamlit-extras>=0.4.0           # Additional Streamlit widgets / utilities
-watchdog>=4.0.0                   # File-change watcher (improves Streamlit hot-reload)
+# ── RAG & Vector Store ───────────────────────────────────────────────────────
+chromadb==0.5.3                   # Local vector database
+sentence-transformers==3.0.1      # HuggingFace sentence embeddings
+huggingface-hub==0.24.6           # Model downloading from HuggingFace
+tiktoken==0.7.0                   # Token counting for text splitting
 
-# ── PDF & TXT Export ──────────────────────────────────────────────────────────
-reportlab>=4.2.0                  # PDF generation
-fpdf2>=2.7.9                      # Lightweight alternative PDF library
+# ── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1              # Load environment variables from .env
+requests==2.32.3                  # HTTP requests
+numpy==1.26.4                     # Numerical computing
+tqdm==4.66.5                      # Progress bars
+psutil==6.0.0                     # System and process utilities (memory monitoring)
+python-magic-bin==0.4.14          # File type detection (Windows binary included)
+PyPDF2==3.0.1                     # PDF text extraction for document Q&A
+supabase==2.3.4                   # Supabase client for cloud storage and database
 
-# ── Utilities ─────────────────────────────────────────────────────────────────
-python-dotenv>=1.0.0              # Load API keys from .env
-numpy>=1.26.0
-tqdm>=4.66.0                      # Progress bars
-requests>=2.32.0
+# ── Testing ──────────────────────────────────────────────────────────────────
+pytest==8.1.1                     # Testing framework
+pytest-asyncio==0.23.5            # Async test support
+pytest-cov==4.1.0                 # Coverage reporting
+pytest-mock==3.12.0               # Mocking support
+httpx==0.27.0                     # Async HTTP client for testing FastAPI
+
+# ── Development Tools (optional) ─────────────────────────────────────────────
+# Uncomment for development
+# black==24.2.0                   # Code formatter
+# flake8==7.0.0                   # Linter
+# mypy==1.8.0                     # Static type checker
+# isort==5.13.2                   # Import sorter
+
+# ── Streamlit UI (optional) ──────────────────────────────────────────────────
+# Uncomment if using Streamlit frontend
+streamlit==1.35.0                 # Streamlit web framework
+streamlit-extras==0.4.0           # Additional Streamlit widgets
+watchdog==4.0.2                   # File-change watcher
+
+# ── Export Features (optional) ───────────────────────────────────────────────
+# Uncomment if you need PDF/document export
+# reportlab==4.2.0                # PDF generation
+# fpdf2==2.7.9                    # Lightweight PDF library
+
+
+# 
+# 1. Create virtual environment:
+#    python -m venv .venv
+#    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+#
+# 2. Upgrade pip:
+#    pip install --upgrade pip
+#
+# 3. Install requirements:
+#    pip install -r requirements.txt
+#
+# 4. Install FFmpeg (required):
+#    - Ubuntu/Debian: sudo apt-get install ffmpeg
+#    - macOS: brew install ffmpeg
+#    - Windows: Download from https://ffmpeg.org/download.html
+#
+
