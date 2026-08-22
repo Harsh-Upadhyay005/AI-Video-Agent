@@ -61,10 +61,29 @@ async def chat_with_transcript(request: ChatRequest):
         # Try to get RAG chain from session/job first
         rag_chain = None
         if request.session_id:
+            logger.info(f"Attempting to retrieve RAG chain for session: {request.session_id}")
             rag_chain = get_rag_chain_for_source(request.session_id)
-            logger.info(f"Retrieved RAG chain for session: {request.session_id}")
+            if rag_chain:
+                logger.info(f"✓ Retrieved RAG chain for session: {request.session_id}")
+            else:
+                logger.warning(f"✗ No RAG chain found for session: {request.session_id}")
+                # Log available keys for debugging
+                from main import _rag_chain_store
+                available_keys = list(_rag_chain_store.keys())
+                logger.warning(f"Available RAG chain keys: {available_keys}")
+        else:
+            logger.info("No session_id provided in request")
         
-        # Fallback to persistent vector store if no session or not found
+        # Fallback 1: Try to get the most recent RAG chain from store
+        if rag_chain is None:
+            from main import _rag_chain_store
+            if _rag_chain_store:
+                # Get the most recent one (last added)
+                last_key = list(_rag_chain_store.keys())[-1]
+                rag_chain = _rag_chain_store[last_key]
+                logger.info(f"Using most recent RAG chain: {last_key}")
+        
+        # Fallback 2: Try persistent vector store
         if rag_chain is None:
             logger.info("Loading RAG chain from persistent vector store")
             rag_chain = load_rag_chain()
@@ -72,11 +91,11 @@ async def chat_with_transcript(request: ChatRequest):
         if rag_chain is None:
             raise HTTPException(
                 status_code=400,
-                detail="No transcript available for chat. Please analyze a video first."
+                detail="No transcript available for chat. Please analyze a video/document first."
             )
         
         # Get answer
-        answer = ask_question(rag_chain, validated_question, debug=request.debug)
+        answer = ask_question(rag_chain, validated_question)
         
         return {
             "answer": answer,
