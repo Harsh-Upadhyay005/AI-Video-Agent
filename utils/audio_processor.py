@@ -159,12 +159,12 @@ def _build_yt_dlp_options(output_path: str, node_path: str, client: str = "andro
 
 def download_youtube_audio(url: str) -> str:
     """
-    Download audio from YouTube URL with cookie-based authentication.
+    Download audio from YouTube URL with robust fallback strategies.
     
-    YouTube now REQUIRES browser cookies (OAuth is deprecated).
-    Make sure you're logged into YouTube in Chrome, Edge, or Firefox.
-    
-    IMPORTANT: Close your browser before running downloads, or cookies cannot be extracted!
+    Strategy:
+    1. Try without cookies (works for most public videos)
+    2. If authentication needed, try with browser cookies
+    3. Handle browser lock gracefully
     
     Args:
         url: YouTube URL
@@ -173,9 +173,9 @@ def download_youtube_audio(url: str) -> str:
         Path to downloaded WAV file
         
     Raises:
-        RuntimeError: If all download strategies fail
+        RuntimeError: If all download strategies fail with clear error message
     """
-    logger.info(f"Attempting to download YouTube audio: {url}")
+    logger.info(f"[YouTubeDownload] Starting download: {url}")
     
     # Check Node.js availability
     if shutil.which("node") is None:
@@ -189,151 +189,198 @@ def download_youtube_audio(url: str) -> str:
     output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     node_path = shutil.which("node") or "node"
     last_error = None
+    download_errors = []
     
-    # Check available browsers for cookie extraction using Windows paths
+    # STRATEGY 1: Try WITHOUT cookies first (works for most public videos)
+    logger.info("[YouTubeDownload] Strategy 1: Attempting download without cookies...")
+    
+    client_strategies = [
+        ("web", "Web client"),
+        ("android", "Android client"),
+        ("ios", "iOS client"),
+    ]
+    
+    for client, description in client_strategies:
+        try:
+            logger.info(f"[YouTubeDownload]   Trying {description} (no cookies)...")
+            
+            # Build options WITHOUT cookies
+            options = {
+                "format": "bestaudio/best",
+                "outtmpl": output_path,
+                "restrictfilenames": True,
+                "noplaylist": True,
+                "quiet": True,
+                "no_warnings": True,
+                "js_runtimes": {"node": {"executable": node_path}},
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": [client],
+                        "player_skip": ["webpage", "configs"],
+                    }
+                },
+                "http_headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "wav",
+                    "preferredquality": "192",
+                }],
+                "retries": 2,
+                "fragment_retries": 2,
+            }
+            
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=True)
+                if info:
+                    filename = os.path.splitext(ydl.prepare_filename(info))[0] + ".wav"
+                    if os.path.exists(filename):
+                        logger.info(f"[YouTubeDownload] ✅ SUCCESS (no cookies needed): {filename}")
+                        return filename
+                    
+        except Exception as e:
+            error_str = str(e).lower()
+            download_errors.append(f"{description} (no cookies): {str(e)[:100]}")
+            
+            # Check if authentication is actually required
+            needs_auth = any(keyword in error_str for keyword in [
+                "sign in",
+                "login",
+                "authenticate",
+                "private",
+                "members-only",
+                "premium"
+            ])
+            
+            if needs_auth:
+                logger.info(f"[YouTubeDownload]   Authentication required, will try cookies")
+                break  # Move to cookie strategy
+            else:
+                logger.debug(f"[YouTubeDownload]   Failed: {str(e)[:100]}")
+                last_error = e
+                continue
+    
+    # STRATEGY 2: Try WITH browser cookies if strategy 1 failed
+    logger.info("[YouTubeDownload] Strategy 2: Attempting download with browser cookies...")
+    
+    # Find available browsers
     available_browsers = []
-    browser_candidates = [("chrome", "Chrome"), ("edge", "Edge"), ("firefox", "Firefox"), 
-                         ("brave", "Brave"), ("opera", "Opera")]
+    browser_candidates = [
+        ("edge", "Edge"),       # Try Edge first (usually not running)
+        ("firefox", "Firefox"), # Then Firefox
+        ("chrome", "Chrome"),   # Chrome last (often running)
+        ("brave", "Brave"),
+    ]
     
     for browser_name, display_name in browser_candidates:
         if _find_browser_executable(browser_name):
-            available_browsers.append(display_name)
+            available_browsers.append((browser_name, display_name))
+            logger.info(f"[YouTubeDownload]   Found browser: {display_name}")
     
     if not available_browsers:
+        # No browsers found - return clear error
         error_msg = (
-            "❌ NO BROWSER FOUND for YouTube cookie extraction!\n\n"
-            "YouTube now REQUIRES browser cookies for downloads.\n"
-            "OAuth authentication is no longer supported.\n\n"
-            "PLEASE INSTALL one of these browsers:\n"
-            "• Google Chrome (recommended)\n"
-            "• Microsoft Edge\n"
-            "• Firefox\n"
-            "• Brave\n"
-            "• Opera\n\n"
-            "After installing a browser:\n"
-            "1. Login to YouTube in the browser\n"
-            "2. Try the download again\n\n"
-            "Alternative: Upload the MP3/MP4 file directly instead of using YouTube URL"
+            "YouTube download failed and no browsers are available for authentication.\n\n"
+            "The video may require login. To fix:\n"
+            "1. Install Chrome, Edge, or Firefox\n"
+            "2. Login to YouTube in that browser\n"
+            "3. Try the download again\n\n"
+            "Alternatively: Download the video manually and upload the file."
         )
-        logger.error(error_msg)
+        logger.error(f"[YouTubeDownload] {error_msg}")
+        if download_errors:
+            logger.error(f"[YouTubeDownload] Previous errors: {'; '.join(download_errors)}")
         raise RuntimeError(error_msg)
     
-    logger.info(f"✓ Found browsers: {', '.join(available_browsers)}")
-    logger.warning(f"⚠️ IMPORTANT: CLOSE {available_browsers[0]} before downloading!")
-    logger.warning(f"   (yt-dlp cannot extract cookies while browser is running)")
-    
-    # Try multiple client strategies in order of success rate
-    client_strategies = [
-        ("web", "Web client (most compatible)"),
-        ("android", "Android client"),
-        ("ios", "iOS client"),
-        ("tv_embedded", "TV embedded client"),
-        ("mweb", "Mobile web client"),
-    ]
-    
-    for attempt, (client, description) in enumerate(client_strategies, 1):
+    # Try each browser
+    for browser_name, display_name in available_browsers:
         try:
-            logger.info(f"Attempt {attempt}/{len(client_strategies)}: Trying {description}...")
+            logger.info(f"[YouTubeDownload]   Trying with {display_name} cookies...")
             
-            ydl_opts = _build_yt_dlp_options(output_path, node_path, client=client)
+            # Build options WITH cookies
+            options = {
+                "format": "bestaudio/best",
+                "outtmpl": output_path,
+                "restrictfilenames": True,
+                "noplaylist": True,
+                "quiet": True,
+                "no_warnings": True,
+                "cookiesfrombrowser": (browser_name,),  # Extract cookies
+                "js_runtimes": {"node": {"executable": node_path}},
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["web"],
+                    }
+                },
+                "http_headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "wav",
+                    "preferredquality": "192",
+                }],
+                "retries": 2,
+                "fragment_retries": 2,
+            }
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                logger.info(f"Extracting video info...")
+            with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=True)
-                
-                if not info:
-                    raise yt_dlp.utils.DownloadError("No video metadata returned for YouTube URL")
-                
-                filename = os.path.splitext(ydl.prepare_filename(info))[0] + ".wav"
-                logger.info(f"✓ Successfully downloaded: {filename}")
-                return filename
-                
-        except yt_dlp.utils.DownloadError as e:
+                if info:
+                    filename = os.path.splitext(ydl.prepare_filename(info))[0] + ".wav"
+                    if os.path.exists(filename):
+                        logger.info(f"[YouTubeDownload] ✅ SUCCESS (with {display_name} cookies): {filename}")
+                        return filename
+                        
+        except Exception as e:
+            error_str = str(e).lower()
+            download_errors.append(f"{display_name} cookies: {str(e)[:100]}")
             last_error = e
-            error_str = str(e)
             
-            # Check for the Chrome cookie database lock error
-            if "Could not copy Chrome cookie database" in error_str or "7271" in error_str:
-                logger.error(f"  ✗ Chrome is RUNNING - cannot extract cookies!")
-                logger.error(f"     Close Chrome and try again, OR login to Edge/Firefox instead")
-                # Don't continue - all attempts will fail with same error
-                raise RuntimeError(
-                    f"❌ Cannot extract cookies from Chrome because it's RUNNING\n\n"
-                    f"FIX Option 1 (RECOMMENDED):\n"
-                    f"1. CLOSE Chrome completely (all windows)\n"
-                    f"2. Wait 5 seconds\n"
-                    f"3. Try the download again\n\n"
-                    f"FIX Option 2:\n"
-                    f"1. Open Edge or Firefox\n"
-                    f"2. Login to YouTube there\n"
-                    f"3. Close Edge/Firefox\n"
-                    f"4. Uninstall or rename Chrome temporarily\n"
-                    f"5. Try the download again (will use Edge/Firefox)\n\n"
-                    f"FIX Option 3:\n"
-                    f"• Download the video manually and upload the MP3/MP4 file\n\n"
-                    f"Technical details: yt-dlp cannot access Chrome's cookie database\n"
-                    f"while Chrome is running because the database is locked.\n"
-                    f"See: https://github.com/yt-dlp/yt-dlp/issues/7271"
-                ) from e
-            
-            # Log the specific error
-            if "Login with OAuth is no longer supported" in error_str:
-                logger.warning(f"  ✗ OAuth deprecated - need browser cookies")
-            elif "403" in error_str or "Forbidden" in error_str:
-                logger.warning(f"  ✗ 403 Forbidden with {client} client")
-            elif "429" in error_str:
-                logger.warning(f"  ✗ Rate limited (429) - adding delay...")
-                import time
-                time.sleep(5)
-            elif "Private video" in error_str or "members-only" in error_str:
-                logger.error(f"  ✗ Video is private or members-only")
-                raise RuntimeError(
-                    "This video is private, members-only, or requires login. "
-                    "The system cannot access it. Please use a public video."
+            # Check for browser lock error
+            if "could not copy" in error_str and "cookie" in error_str:
+                logger.warning(
+                    f"[YouTubeDownload]   {display_name} is running (cookies locked). "
+                    "Trying next browser..."
                 )
-            elif "Video unavailable" in error_str:
-                logger.error(f"  ✗ Video unavailable (deleted, region-locked, or invalid URL)")
+                continue
+            
+            # Check for other specific errors
+            if "private" in error_str or "members-only" in error_str:
                 raise RuntimeError(
-                    "This video is unavailable (deleted, region-locked, or invalid URL). "
-                    "Please check the URL and try a different video."
+                    "This video is private or members-only and cannot be accessed. "
+                    "Please use a public video or upload the file directly."
                 )
-            else:
-                logger.warning(f"  ✗ {client} failed: {error_str}")
             
-            continue
-            
-        except Exception as exc:
-            last_error = exc
-            logger.warning(f"  ✗ Unexpected error with {client}: {exc}")
+            logger.debug(f"[YouTubeDownload]   Failed with {display_name}: {str(e)[:100]}")
             continue
     
-    # All strategies failed
+    # All strategies failed - provide helpful error message
+    error_summary = "\n".join(f"  • {err}" for err in download_errors[-5:])  # Last 5 errors
+    
+    browser_list = ", ".join(name for _, name in available_browsers)
+    
     error_msg = (
-        f"Unable to download YouTube audio after trying {len(client_strategies)} strategies.\n\n"
-        f"Last error: {last_error}\n\n"
-        f"⚠️ CRITICAL: YouTube now REQUIRES browser cookies for downloads.\n"
-        f"OAuth authentication is NO LONGER SUPPORTED by YouTube.\n\n"
-        f"REQUIRED STEPS TO FIX:\n"
-        f"1. Login to YouTube in {available_browsers[0]}\n"
-        f"2. CLOSE {available_browsers[0]} completely (all windows)\n"
-        f"3. Wait 5 seconds for browser to fully close\n"
-        f"4. Try the download again\n\n"
-        f"WHY: yt-dlp cannot extract cookies while the browser is running.\n"
-        f"The browser locks its cookie database.\n\n"
-        f"Detected browsers: {', '.join(available_browsers)}\n"
-        f"Will try to use: {available_browsers[0]}\n\n"
-        f"Still failing? Check these:\n"
-        f"• Make sure browser is actually CLOSED (check Task Manager)\n"
-        f"• Try using Edge or Firefox instead of Chrome\n"
-        f"• Update yt-dlp: pip install --upgrade yt-dlp\n"
-        f"• Video might be private, age-restricted, or region-locked\n\n"
-        f"Alternative solution:\n"
-        f"• Download the video manually and upload the MP3/MP4 file\n\n"
-        f"Help: docs/YOUTUBE_DOWNLOAD_TROUBLESHOOTING.md"
+        f"YouTube download failed after trying multiple strategies.\n\n"
+        f"Attempted:\n"
+        f"1. Download without authentication ❌\n"
+        f"2. Download with browser cookies ({browser_list}) ❌\n\n"
+        f"Recent errors:\n{error_summary}\n\n"
+        f"Possible solutions:\n"
+        f"1. If browsers are running: Close ALL browser windows and try again\n"
+        f"2. Login to YouTube in Edge/Firefox (usually easier than Chrome)\n"
+        f"3. Try a different YouTube video (this one may be restricted)\n"
+        f"4. Download the video manually and upload the MP3/MP4 file\n\n"
+        f"Video URL: {url}"
     )
     
+    logger.error(f"[YouTubeDownload] All strategies failed")
     logger.error(error_msg)
-    raise RuntimeError(error_msg) from last_error
+    
+    raise RuntimeError(error_msg)
 
 
 def convert_to_wav(input_path: str) -> str:
