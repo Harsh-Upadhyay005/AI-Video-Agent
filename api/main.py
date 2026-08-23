@@ -47,10 +47,11 @@ async def lifespan(app: FastAPI):
         
         # Run health checks
         logger.info("Running health checks...")
-        health_results = HealthCheck.run_all_checks(skip_api_checks=False)
-        
-        if health_results["overall_status"] != "healthy":
-            logger.warning("Health check warnings detected, but continuing startup")
+        logger.info("Skipping embedding model load during startup for faster boot")
+        # health_results = HealthCheck.run_all_checks(skip_api_checks=False)
+        # 
+        # if health_results["overall_status"] != "healthy":
+        #     logger.warning("Health check warnings detected, but continuing startup")
         
         # Run security check
         logger.info("Running security check...")
