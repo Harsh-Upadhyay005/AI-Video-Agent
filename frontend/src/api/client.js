@@ -71,41 +71,69 @@ class APIClient {
 
   // File upload and analysis
   async uploadAndAnalyze(file, language = 'english', onProgress = null) {
+    console.log('=== API CLIENT: uploadAndAnalyze START ===');
+    console.log('File:', file);
+    console.log('File name:', file?.name);
+    console.log('File size:', file?.size);
+    console.log('File type:', file?.type);
+    console.log('Language:', language);
+    console.log('Base URL:', this.baseURL);
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('language', language);
 
     const url = `${this.baseURL}/api/v1/upload`;
+    console.log('Request URL:', url);
+    console.log('FormData contents:');
+    for (let pair of formData.entries()) {
+      console.log('  -', pair[0], ':', pair[1]);
+    }
 
     try {
+      console.log('Sending fetch request...');
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
         // Don't set Content-Type header - browser will set it with boundary
       });
 
+      console.log('Response received:', response.status, response.statusText);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
       const contentType = response.headers.get('content-type');
       let data;
 
       if (contentType && contentType.includes('application/json')) {
         data = await response.json();
+        console.log('Response data (JSON):', data);
       } else {
         const text = await response.text();
+        console.log('Response data (text):', text);
         data = { message: text };
       }
 
       if (!response.ok) {
         const errorMessage = data.detail || data.message || `Upload failed with status ${response.status}`;
+        console.error('Upload failed:', errorMessage);
         throw new Error(errorMessage);
       }
 
+      console.log('Upload successful, job_id:', data.job_id);
+
       // If we got a job_id, poll for progress
       if (data.job_id) {
+        console.log('Starting progress polling for job:', data.job_id);
         return this.pollJobProgress(data.job_id, onProgress);
       }
 
       return data;
     } catch (error) {
+      console.error('=== API CLIENT: uploadAndAnalyze ERROR ===');
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         throw new Error('Cannot connect to backend. Make sure backend is running on http://localhost:8000');
       }
