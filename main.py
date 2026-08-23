@@ -360,20 +360,30 @@ def run_pipeline(
     }
 
 
-# Internal storage for RAG chains (in production, use Redis or database)
-_rag_chain_store = {}
+# ============================================================================
+# RAG Chain Storage - Now using persistent storage with Redis/in-memory fallback
+# ============================================================================
+
+from core.rag_storage import get_rag_storage
 
 
 def _store_rag_chain_internally(source_key: str, rag_chain):
     """
-    Store RAG chain internally for chat functionality.
+    Store RAG chain with persistent storage.
+    
+    Uses Redis if available, falls back to in-memory dict.
     
     Args:
-        source_key: Unique identifier for the source
+        source_key: Unique identifier for the source (job_id or session_id)
         rag_chain: The RAG chain instance
     """
-    _rag_chain_store[source_key] = rag_chain
-    logger.info(f"[Pipeline] Stored RAG chain: {source_key}")
+    storage = get_rag_storage()
+    success = storage.store_rag_chain(source_key, rag_chain)
+    
+    if success:
+        logger.info(f"[Pipeline] ✓ Stored RAG chain: {source_key}")
+    else:
+        logger.error(f"[Pipeline] ✗ Failed to store RAG chain: {source_key}")
 
 
 def get_rag_chain_for_source(source_key: str):
@@ -386,7 +396,43 @@ def get_rag_chain_for_source(source_key: str):
     Returns:
         The stored RAG chain or None if not found
     """
-    return _rag_chain_store.get(source_key)
+    storage = get_rag_storage()
+    rag_chain = storage.get_rag_chain(source_key)
+    
+    if rag_chain:
+        logger.info(f"[Pipeline] ✓ Retrieved RAG chain: {source_key}")
+    else:
+        logger.debug(f"[Pipeline] RAG chain not found: {source_key}")
+    
+    return rag_chain
+
+
+def get_most_recent_rag_chain():
+    """
+    Get the most recently stored RAG chain.
+    
+    Returns:
+        RAG chain instance or None
+    """
+    storage = get_rag_storage()
+    session_id = storage.get_most_recent_session()
+    
+    if session_id:
+        logger.info(f"[Pipeline] Most recent session: {session_id}")
+        return storage.get_rag_chain(session_id)
+    
+    return None
+
+
+def list_all_rag_sessions():
+    """
+    List all stored RAG chain sessions.
+    
+    Returns:
+        List of session IDs
+    """
+    storage = get_rag_storage()
+    return storage.list_sessions()
 
 
 if __name__ == "__main__":
