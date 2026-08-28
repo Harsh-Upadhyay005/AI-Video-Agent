@@ -1,232 +1,211 @@
 """
-Query Intent Classification and Routing for RAG System.
-Routes questions to appropriate retrieval strategies.
+Query Router - Intelligent routing for RAG queries.
+
+Detects query intent and routes to appropriate handler:
+1. Whole-content summarization (map-reduce over full document)
+2. Normal RAG retrieval (top-k semantic search)
+
+Works uniformly for PDF documents and audio/video transcripts.
 """
 
-import os
 import re
+from typing import Dict, Any, Optional, List
 from enum import Enum
-from typing import Dict, Optional
-from dataclasses import dataclass
 
-try:
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.prompts import ChatPromptTemplate
-    from langchain_core.output_parsers import StrOutputParser
-except ImportError:
-    ChatMistralAI = None
-    ChatPromptTemplate = None
-    StrOutputParser = None
+from core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-class QueryIntent(Enum):
+class QueryType(Enum):
     """Types of user queries."""
-    LOCAL_QA = "local_qa"  # Specific factual question about a topic
-    GLOBAL_SUMMARY = "global_summary"  # Summarize entire video
-    TOPIC_EXTRACTION = "topic_extraction"  # List main topics/concepts
-    TIMELINE = "timeline"  # When was X discussed?
-    UNKNOWN = "unknown"
+    WHOLE_CONTENT_SUMMARY = "whole_content_summary"  # Needs full document
+    SPECIFIC_QUESTION = "specific_question"  # Needs RAG retrieval
+    EXTRACTION = "extraction"  # Needs targeted retrieval
 
 
-@dataclass
-class ClassifiedQuery:
-    """Result of query classification."""
-    intent: QueryIntent
-    original_query: str
-    confidence: str  # high, medium, low
-    reasoning: Optional[str] = None
-
-
-class QueryClassifier:
+class QueryIntent:
     """
-    Classifies user queries into intent categories.
-    Uses rule-based classification first, falls back to LLM if needed.
+    Analyzed query intent with routing information.
     """
     
-    # Keywords for rule-based classification
-    GLOBAL_KEYWORDS = [
-        r'\b(all|entire|complete|whole|overall)\b.*\b(video|content|discussion|transcript|meeting)\b',
-        r'\b(summarize|summary)\b',  # Simplified to catch all summarize requests
-        r'\bwhat\s+(is|was|are|were)\s+(this|the)\s+(video|meeting|discussion)\s+about\b',
-        r'\bmain\s+(point|points|idea|ideas|takeaway|takeaways)\b',
-        r'\bkey\s+(takeaway|takeaways|point|points)\b',
-        r'\b(give me|provide)\s+(a\s+)?(summary|overview)\b'
+    def __init__(
+        self,
+        query_type: QueryType,
+        original_query: str,
+        constraint: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Initialize query intent.
+        
+        Args:
+            query_type: Type of query
+            original_query: Original user query
+            constraint: Optional constraints (word_limit, format, etc.)
+        """
+        self.query_type = query_type
+        self.original_query = original_query
+        self.constraint = constraint or {}
+    
+    def __repr__(self):
+        return f"QueryIntent(type={self.query_type.value}, constraint={self.constraint})"
+
+
+class QueryRouter:
+    """
+    Routes queries to appropriate processing pipeline.
+    
+    Detects:
+    - Whole-content summarization requests
+    - Explicit constraints (word limits, bullet points, etc.)
+    - Specific questions requiring retrieval
+    """
+    
+    # Patterns for whole-content requests
+    SUMMARY_PATTERNS = [
+        r'\bsummar(y|ize|ization)\b',
+        r'\boverview\b',
+        r'\bmain\s+(points?|ideas?|topics?)\b',
+        r'\bkey\s+(points?|takeaways?|insights?)\b',
+        r'\bgive\s+me\s+(the|a)\s+(main|key|overall)',
+        r'\bwhat\s+(is|are)\s+the\s+main',
+        r'\btell\s+me\s+about',
+        r'\bgeneral\s+idea\b',
+        r'\bhighlights?\b',
+        r'\bsynops(is|es)\b',
+        r'\bgist\b',
+        r'\bexecutive\s+summary\b',
+        r'\bquick\s+summary\b',
     ]
     
-    TOPIC_EXTRACTION_KEYWORDS = [
-        r'\b(list|what|identify|name|enumerate)\b.*\b(\d+\s+)?(main|key|major|important|primary)\s+(topic|topics|concept|concepts|theme|themes|subject|subjects|idea|ideas)\b',
-        r'\b(\d+\s+)?(key|main|major|important)\s+(concept|concepts|topic|topics)\b.*\b(discuss|discussed|cover|covered|mention|mentioned)\b',
-        r'\bhow\s+many\b.*\b(topic|topics|concept|concepts|theme|themes)\b',
-        r'\bwhat\s+(are|were)\s+the\b.*\b(topic|topics|concept|concepts|idea|ideas)\b'
+    # Patterns for extraction requests
+    EXTRACTION_PATTERNS = [
+        r'\blist\s+(all|the)',
+        r'\bextract\b',
+        r'\bfind\s+all',
+        r'\benumerate\b',
+        r'\bidentify\s+all\b',
     ]
     
-    TIMELINE_KEYWORDS = [
-        r'\b(when|at what (time|timestamp|point))\b.*\b(discuss|discussed|mention|mentioned|talk|talked|explain|explained|introduce|introduced)\b',
-        r'\b(timestamp|time|minute|second)\b.*\b(for|of|when)\b',
-        r'\bat\s+what\s+(point|timestamp|time)\b',
-        r'\bwhat\s+(time|timestamp)\b.*\b(did|were|was)\b'
-    ]
+    # Patterns for explicit constraints
+    WORD_LIMIT_PATTERN = r'(\d+)\s*[-–]?\s*word'
+    BULLET_PATTERN = r'\bbullet\s+(points?|list)\b|\bbulleted\b'
+    NUMBERED_PATTERN = r'\bnumbered\s+list\b'
     
     def __init__(self):
-        """Initialize classifier."""
-        self.llm = None
-        if ChatMistralAI is not None:
-            try:
-                self.llm = ChatMistralAI(
-                    model="mistral-small-latest",
-                    mistral_api_key=os.getenv("MISTRAL_API_KEY"),
-                    temperature=0.0
-                )
-            except Exception as e:
-                print(f"[QueryClassifier] Warning: Could not initialize LLM: {e}")
+        """Initialize query router."""
+        logger.info("[QueryRouter] Initialized")
     
-    def classify(self, query: str) -> ClassifiedQuery:
+    def analyze_query(self, query: str) -> QueryIntent:
         """
-        Classify user query into intent category.
+        Analyze query and determine routing.
         
         Args:
-            query: User's question
+            query: User's query text
             
         Returns:
-            ClassifiedQuery with intent and confidence
+            QueryIntent with routing information
         """
-        query_lower = query.lower().strip()
+        query_lower = query.lower()
         
-        # Rule-based classification (fast and reliable)
+        # Check for word limit constraint
+        word_limit = None
+        word_match = re.search(self.WORD_LIMIT_PATTERN, query_lower)
+        if word_match:
+            word_limit = int(word_match.group(1))
+            logger.info(f"[QueryRouter] Detected word limit: {word_limit}")
         
-        # Check for TIMELINE questions
-        for pattern in self.TIMELINE_KEYWORDS:
-            if re.search(pattern, query_lower, re.IGNORECASE):
-                return ClassifiedQuery(
-                    intent=QueryIntent.TIMELINE,
+        # Check for format constraints
+        constraints = {}
+        if word_limit:
+            constraints['word_limit'] = word_limit
+        
+        if re.search(self.BULLET_PATTERN, query_lower):
+            constraints['format'] = 'bullets'
+            logger.info("[QueryRouter] Detected bullet point format")
+        elif re.search(self.NUMBERED_PATTERN, query_lower):
+            constraints['format'] = 'numbered'
+            logger.info("[QueryRouter] Detected numbered list format")
+        
+        # Determine query type
+        
+        # 1. Check for whole-content summarization
+        for pattern in self.SUMMARY_PATTERNS:
+            if re.search(pattern, query_lower):
+                logger.info(f"[QueryRouter] Matched summary pattern: {pattern}")
+                return QueryIntent(
+                    query_type=QueryType.WHOLE_CONTENT_SUMMARY,
                     original_query=query,
-                    confidence="high",
-                    reasoning="Contains timestamp/time-based keywords"
+                    constraint=constraints
                 )
         
-        # Check for TOPIC_EXTRACTION questions
-        for pattern in self.TOPIC_EXTRACTION_KEYWORDS:
-            if re.search(pattern, query_lower, re.IGNORECASE):
-                return ClassifiedQuery(
-                    intent=QueryIntent.TOPIC_EXTRACTION,
-                    original_query=query,
-                    confidence="high",
-                    reasoning="Requests list of topics/concepts"
-                )
-        
-        # Check for GLOBAL_SUMMARY questions
-        for pattern in self.GLOBAL_KEYWORDS:
-            if re.search(pattern, query_lower, re.IGNORECASE):
-                return ClassifiedQuery(
-                    intent=QueryIntent.GLOBAL_SUMMARY,
-                    original_query=query,
-                    confidence="high",
-                    reasoning="Asks about entire video/overall content"
-                )
-        
-        # Check for specific question patterns (LOCAL_QA)
-        local_patterns = [
-            r'\bwhat\s+is\b',
-            r'\bexplain\b',
-            r'\bdescribe\b',
-            r'\bhow\s+does\b',
-            r'\bwhy\s+(is|does|did)\b',
-            r'\bdefine\b',
-            r'\btell\s+me\s+about\b'
-        ]
-        
-        for pattern in local_patterns:
-            if re.search(pattern, query_lower, re.IGNORECASE):
-                # Make sure it's not also a global question
-                if not any(re.search(p, query_lower, re.IGNORECASE) for p in self.GLOBAL_KEYWORDS):
-                    return ClassifiedQuery(
-                        intent=QueryIntent.LOCAL_QA,
+        # 2. Check for extraction requests (often needs more chunks)
+        for pattern in self.EXTRACTION_PATTERNS:
+            if re.search(pattern, query_lower):
+                logger.info(f"[QueryRouter] Matched extraction pattern: {pattern}")
+                # Extraction with constraints might need full content
+                if constraints.get('word_limit') or constraints.get('format'):
+                    return QueryIntent(
+                        query_type=QueryType.WHOLE_CONTENT_SUMMARY,
                         original_query=query,
-                        confidence="high",
-                        reasoning="Specific factual question pattern"
+                        constraint=constraints
                     )
+                return QueryIntent(
+                    query_type=QueryType.EXTRACTION,
+                    original_query=query,
+                    constraint=constraints
+                )
         
-        # Default to LOCAL_QA for most questions
-        # (Better to over-retrieve than under-retrieve)
-        return ClassifiedQuery(
-            intent=QueryIntent.LOCAL_QA,
+        # 3. Default: specific question needing retrieval
+        logger.info("[QueryRouter] Classified as specific question (RAG retrieval)")
+        return QueryIntent(
+            query_type=QueryType.SPECIFIC_QUESTION,
             original_query=query,
-            confidence="medium",
-            reasoning="Default classification - no strong global/timeline signals"
+            constraint=constraints
         )
     
-    def classify_with_llm(self, query: str) -> ClassifiedQuery:
+    def should_use_full_content(self, query_intent: QueryIntent) -> bool:
         """
-        Use LLM for classification (backup method).
+        Determine if query requires full content processing.
         
         Args:
-            query: User's question
+            query_intent: Analyzed query intent
             
         Returns:
-            ClassifiedQuery with intent
+            True if full content should be used (map-reduce)
         """
-        if self.llm is None or ChatPromptTemplate is None or StrOutputParser is None:
-            # Fallback to rule-based
-            return self.classify(query)
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a query intent classifier. Classify the user's question into one of these categories:
-
-LOCAL_QA: Specific question about a particular topic, concept, or fact
-GLOBAL_SUMMARY: Request to summarize the entire video/content
-TOPIC_EXTRACTION: Request to list main topics, concepts, or themes
-TIMELINE: Question about when something was discussed (timestamps)
-
-Respond with ONLY the category name (e.g., "LOCAL_QA")."""),
-            ("human", "{query}")
-        ])
-        
-        try:
-            chain = prompt | self.llm | StrOutputParser()
-            result = chain.invoke({"query": query}).strip().upper()
-            
-            # Map to enum
-            intent_map = {
-                "LOCAL_QA": QueryIntent.LOCAL_QA,
-                "GLOBAL_SUMMARY": QueryIntent.GLOBAL_SUMMARY,
-                "TOPIC_EXTRACTION": QueryIntent.TOPIC_EXTRACTION,
-                "TIMELINE": QueryIntent.TIMELINE
-            }
-            
-            intent = intent_map.get(result, QueryIntent.LOCAL_QA)
-            
-            return ClassifiedQuery(
-                intent=intent,
-                original_query=query,
-                confidence="high",
-                reasoning="LLM classification"
-            )
-        except Exception as e:
-            print(f"[QueryClassifier] LLM classification failed: {e}")
-            # Fallback to rule-based
-            return self.classify(query)
-
-
-# Global instance
-_classifier = None
-
-def get_query_classifier() -> QueryClassifier:
-    """Get singleton query classifier instance."""
-    global _classifier
-    if _classifier is None:
-        _classifier = QueryClassifier()
-    return _classifier
-
-
-def classify_query(query: str) -> ClassifiedQuery:
-    """
-    Convenience function to classify a query.
+        return query_intent.query_type == QueryType.WHOLE_CONTENT_SUMMARY
     
-    Args:
-        query: User's question
+    def get_retrieval_k(self, query_intent: QueryIntent) -> int:
+        """
+        Get appropriate number of chunks for retrieval.
         
-    Returns:
-        ClassifiedQuery with intent and confidence
-    """
-    classifier = get_query_classifier()
-    return classifier.classify(query)
+        Args:
+            query_intent: Analyzed query intent
+            
+        Returns:
+            Number of chunks to retrieve
+        """
+        if query_intent.query_type == QueryType.EXTRACTION:
+            # Extraction might need more context
+            return 15
+        elif query_intent.query_type == QueryType.SPECIFIC_QUESTION:
+            # Normal questions use default
+            return 5
+        else:
+            # Shouldn't be called for whole-content
+            return 10
+
+
+# Singleton instance
+_query_router_instance = None
+
+
+def get_query_router() -> QueryRouter:
+    """Get singleton query router instance."""
+    global _query_router_instance
+    
+    if _query_router_instance is None:
+        _query_router_instance = QueryRouter()
+    
+    return _query_router_instance
