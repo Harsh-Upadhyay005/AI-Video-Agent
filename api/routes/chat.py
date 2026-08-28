@@ -42,74 +42,107 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_transcript(request: ChatRequest):
     """
-    Ask questions about a previously analyzed transcript using RAG.
+    Ask questions about a previously analyzed transcript using intelligent RAG.
     
-    - **question**: Your question about the transcript
+    - **question**: Your question about the transcript/document
     - **session_id**: Optional job ID or session ID to retrieve the correct RAG chain
+    - **debug**: Enable debug logging for query routing
     
-    Returns an AI-generated answer based on the transcript.
+    Intelligent Query Routing:
+    1. **Whole-content summarization**: For requests like "summarize", "give me 50-word summary", 
+       "main points", "overview" - uses map-reduce over full content with constraint handling
+    2. **Specific questions**: For targeted questions like "What is chapter 3 about?" - 
+       uses semantic search (top-k retrieval) with LLM answering
+    3. **Extraction**: For requests like "list all action items" - uses expanded retrieval
     
-    Note: If session_id is provided, uses the RAG chain from that specific analysis job.
-    Otherwise, loads from persistent vector store (last analyzed transcript).
+    Supports constraints:
+    - Word limits: "Give me a 50-word summary"
+    - Format: "Summarize in bullet points" or "numbered list"
+    
+    Returns an AI-generated answer based on the content.
+    
+    RAG Chain Retrieval Strategy:
+    1. If session_id provided, use that specific RAG chain
+    2. Otherwise, use the most recently stored RAG chain
+    3. If none found, return error with helpful message
     """
     try:
         # Validate question
         validated_question = InputValidator.validate_question(request.question)
         
-        logger.info(f"Processing chat query: {validated_question[:100]}")
+        logger.info(f"[Chat] Processing query: {validated_question[:100]}...")
         
-        # Try to get RAG chain from session/job first
+        # Try to get RAG chain from session/job
         rag_chain = None
+        
         if request.session_id:
-            logger.info(f"Attempting to retrieve RAG chain for session: {request.session_id}")
+            logger.info(f"[Chat] Looking for session: {request.session_id}")
             rag_chain = get_rag_chain_for_source(request.session_id)
+            
             if rag_chain:
-                logger.info(f"✓ Retrieved RAG chain for session: {request.session_id}")
+                logger.info(f"[Chat] ✓ Found RAG chain for session: {request.session_id}")
             else:
-                logger.warning(f"✗ No RAG chain found for session: {request.session_id}")
-                # Log available keys for debugging
-                from main import _rag_chain_store
-                available_keys = list(_rag_chain_store.keys())
-                logger.warning(f"Available RAG chain keys: {available_keys}")
+                logger.warning(f"[Chat] ✗ No RAG chain found for session: {request.session_id}")
         else:
-            logger.info("No session_id provided in request")
+            logger.info("[Chat] No session_id provided, looking for most recent RAG chain")
         
-        # Fallback 1: Try to get the most recent RAG chain from store
+        # Fallback: Use most recent RAG chain
         if rag_chain is None:
-            from main import _rag_chain_store
-            if _rag_chain_store:
-                # Get the most recent one (last added)
-                last_key = list(_rag_chain_store.keys())[-1]
-                rag_chain = _rag_chain_store[last_key]
-                logger.info(f"Using most recent RAG chain: {last_key}")
+            from main import get_most_recent_rag_chain, list_all_rag_sessions
+            
+            rag_chain = get_most_recent_rag_chain()
+            
+            if rag_chain:
+                logger.info("[Chat] ✓ Using most recent RAG chain")
+            else:
+                # List available sessions for debugging
+                available_sessions = list_all_rag_sessions()
+                logger.error(f"[Chat] No RAG chains available. Available sessions: {available_sessions}")
+                
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "No transcript available for chat",
+                        "message": "Please analyze a video/document first. No RAG chains found in storage.",
+                        "available_sessions": available_sessions
+                    }
+                )
         
-        # Fallback 2: Try persistent vector store
-        if rag_chain is None:
-            logger.info("Loading RAG chain from persistent vector store")
-            rag_chain = load_rag_chain()
+        # Get answer with intelligent routing (with timeout)
+        import asyncio
         
-        if rag_chain is None:
+        try:
+            # Run with 60 second timeout
+            answer_dict = await asyncio.wait_for(
+                asyncio.to_thread(ask_question, rag_chain, validated_question, debug=request.debug),
+                timeout=60.0
+            )
+            
+            return {
+                "answer": answer_dict.get("answer", "No answer generated."),
+                "session_id": request.session_id,
+                "sources": answer_dict.get("sources", []),
+                "query_type": answer_dict.get("query_type", "unknown")
+            }
+            
+        except asyncio.TimeoutError:
+            logger.error("[Chat] Request timed out after 60 seconds")
             raise HTTPException(
-                status_code=400,
-                detail="No transcript available for chat. Please analyze a video/document first."
+                status_code=504,
+                detail="Request timed out. The question may be too complex or the document too large. Try a simpler question."
             )
         
-        # Get answer
-        answer = ask_question(rag_chain, validated_question)
-        
-        return {
-            "answer": answer,
-            "session_id": request.session_id
-        }
-        
     except ValidationError as e:
-        logger.error(f"Validation error: {e.message}")
+        logger.error(f"[Chat] Validation error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except Exception as e:
-        logger.error(f"Chat error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to process question")
+        logger.error(f"[Chat] Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process question: {str(e)}"
+        )
 
 
 @router.delete("/chat/session/{session_id}")
@@ -119,24 +152,67 @@ async def clear_chat_session(session_id: str):
     
     - **session_id**: The session ID to clear
     
-    This is useful for freeing up memory and starting fresh.
+    This is useful for freeing up memory/storage and starting fresh.
     """
     try:
-        # In production: Clear session from cache/database
-        logger.info(f"Clearing chat session: {session_id}")
+        logger.info(f"[Chat] Clearing session: {session_id}")
         
-        # Clear from internal storage if exists
-        from main import _rag_chain_store
-        if session_id in _rag_chain_store:
-            del _rag_chain_store[session_id]
-            logger.info(f"Removed RAG chain for session: {session_id}")
+        # Use persistent storage
+        from core.rag_storage import get_rag_storage
+        storage = get_rag_storage()
+        
+        deleted = storage.delete_rag_chain(session_id)
+        
+        if deleted:
+            logger.info(f"[Chat] ✓ Successfully deleted session: {session_id}")
+            return {
+                "message": f"Session {session_id} cleared successfully",
+                "session_id": session_id,
+                "deleted": True
+            }
+        else:
+            logger.warning(f"[Chat] Session not found: {session_id}")
+            return {
+                "message": f"Session {session_id} not found",
+                "session_id": session_id,
+                "deleted": False
+            }
+        
+    except Exception as e:
+        logger.error(f"[Chat] Failed to clear session {session_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to clear session")
+
+
+
+@router.get("/chat/storage/health")
+async def get_storage_health():
+    """
+    Get RAG storage health status.
+    
+    Returns information about:
+    - Storage backend (Redis or in-memory)
+    - Connection status
+    - Number of stored sessions
+    - Available session IDs
+    """
+    try:
+        from core.rag_storage import get_rag_storage
+        from main import list_all_rag_sessions
+        
+        storage = get_rag_storage()
+        health = storage.health_check()
+        
+        # Add session list
+        health['sessions'] = list_all_rag_sessions()
         
         return {
-            "message": f"Session {session_id} cleared successfully",
-            "session_id": session_id
+            "status": "healthy" if health['healthy'] else "degraded",
+            "storage": health
         }
         
     except Exception as e:
-        logger.error(f"Failed to clear session {session_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to clear session")
-
+        logger.error(f"[Chat] Storage health check failed: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
