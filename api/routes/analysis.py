@@ -111,7 +111,7 @@ async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTa
 
 async def process_analysis_with_progress(job_id: str, source: str, language: str):
     """
-    Process the analysis with real-time progress updates.
+    Process the analysis with real-time progress updates and enhanced error handling.
     
     Args:
         job_id: Unique job identifier
@@ -130,16 +130,25 @@ async def process_analysis_with_progress(job_id: str, source: str, language: str
                 progress_store[job_id]["progress"] = progress
     
     try:
-        logger.info(f"Processing job {job_id}: source={source}, language={language}")
+        logger.info(f"[Job {job_id}] Processing: source={source}, language={language}")
         
-        update_progress("downloading", "Downloading audio from URL...", 10)
+        # Import PipelineError for structured error handling
+        from main import PipelineError
         
         # Run the pipeline with progress callback
-        # Note: Pipeline internally stores RAG chain using the source_key parameter
         result = run_pipeline(source, language, progress_callback=update_progress, source_key=job_id)
         
-        # Ensure result contains only JSON-serializable data
-        # Filter out any non-serializable objects (defense in depth)
+        # Check for stage failures
+        stage_statuses = result.get("stage_statuses", {})
+        has_critical_failure = False
+        failed_stages = []
+        
+        for stage_name, stage_info in stage_statuses.items():
+            if stage_info['status'] == 'failed' and stage_name in ['audio_processing', 'transcription', 'pdf_extraction']:
+                has_critical_failure = True
+                failed_stages.append(stage_name)
+        
+        # Build JSON-safe result
         json_safe_result = {
             "title": result.get("title", ""),
             "transcript": result.get("transcript", ""),
@@ -147,38 +156,81 @@ async def process_analysis_with_progress(job_id: str, source: str, language: str
             "action_items": result.get("action_items", ""),
             "key_decisions": result.get("key_decisions", ""),
             "open_questions": result.get("open_questions", ""),
-            "job_id": job_id  # Include job_id so frontend can use it for chat
+            "job_id": job_id,
+            "stage_statuses": stage_statuses  # Include stage status information
         }
         
-        # Store result (guaranteed JSON-serializable)
-        progress_store[job_id].update({
-            "status": "completed",
-            "stage": "done",
-            "progress": 100,
-            "message": "Analysis complete!",
-            "result": json_safe_result
-        })
+        # Determine final status
+        if has_critical_failure:
+            # Critical stage failed - mark as failed but include partial results
+            progress_store[job_id].update({
+                "status": "failed",
+                "stage": failed_stages[0] if failed_stages else "unknown",
+                "progress": 0,
+                "message": f"Critical error in {', '.join(failed_stages)}",
+                "error": f"Pipeline failed at: {', '.join(failed_stages)}",
+                "error_code": stage_statuses[failed_stages[0]].get('error_code', 'PIPELINE_ERROR'),
+                "result": json_safe_result  # Include partial results
+            })
+        else:
+            # Success (possibly with non-critical warnings)
+            progress_store[job_id].update({
+                "status": "completed",
+                "stage": "done",
+                "progress": 100,
+                "message": "Analysis complete!",
+                "result": json_safe_result
+            })
         
-        logger.info(f"Job {job_id} completed successfully")
+        logger.info(f"[Job {job_id}] Completed")
         
-    except ValueError as e:
-        # Handle empty transcript or validation errors
-        logger.error(f"Job {job_id} validation failed: {str(e)}", exc_info=True)
-        progress_store[job_id].update({
-            "status": "failed",
-            "stage": "error",
-            "progress": 0,
-            "message": str(e),
-            "error": str(e)
-        })
     except Exception as e:
-        logger.error(f"Job {job_id} failed: {str(e)}", exc_info=True)
+        # Check if it's a structured pipeline error
+        error_stage = "unknown"
+        error_code = "UNKNOWN_ERROR"
+        error_message = str(e)
+        
+        # Try to extract structured error information
+        if hasattr(e, 'stage'):
+            error_stage = e.stage
+        if hasattr(e, 'error_code'):
+            error_code = e.error_code
+        if hasattr(e, 'message'):
+            error_message = e.message
+        
+        # Map error types to user-friendly messages
+        if "YouTube" in error_message or "youtube" in error_message:
+            error_code = "YOUTUBE_DOWNLOAD_ERROR"
+            if "cookie" in error_message.lower():
+                error_code = "YOUTUBE_COOKIE_ERROR"
+                error_message = (
+                    "YouTube download failed due to authentication issues. "
+                    "The video may require login or your browser's cookies are locked. "
+                    "Please try: 1) Using a different video, or 2) Uploading the file directly."
+                )
+        elif "rate limit" in error_message.lower() or "429" in error_message:
+            error_code = "MISTRAL_RATE_LIMIT"
+            error_message = (
+                "AI service rate limit exceeded. The document was processed but some analysis "
+                "features are unavailable. Please wait a few minutes and try again, or use the "
+                "RAG chat feature to ask specific questions about the content."
+            )
+        elif "PDF" in error_message or "pdf" in error_message:
+            error_code = "PDF_PROCESSING_ERROR"
+        elif "transcription" in error_message.lower():
+            error_code = "TRANSCRIPTION_ERROR"
+        
+        logger.error(f"[Job {job_id}] Failed: [{error_code}] {error_message}", exc_info=True)
+        
         progress_store[job_id].update({
             "status": "failed",
-            "stage": "error",
-            "message": str(e),
-            "error": str(e)
+            "stage": error_stage,
+            "progress": 0,
+            "message": error_message,
+            "error": error_message,
+            "error_code": error_code
         })
+
 
 
 @router.get("/progress/{job_id}")
