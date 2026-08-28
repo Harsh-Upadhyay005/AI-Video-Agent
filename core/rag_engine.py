@@ -1,76 +1,99 @@
 """
-Enhanced RAG Engine with Query Intent Routing.
-Handles both local (specific) and global (whole-video) questions.
+RAG Engine - Unified Retrieval and Question Answering.
+Handles both PDF documents and audio/video transcripts uniformly.
+
+Architecture:
+1. Content ingestion creates vector store (PDF or transcript)
+2. User asks question
+3. RAG retrieves relevant chunks
+4. LLM answers using ONLY retrieved chunks (not entire document)
+
+CRITICAL: LLM is used ONLY after retrieval, never on entire documents.
+LAZY INITIALIZATION: LLM service is NOT loaded during ingestion.
 """
 
 import os
 from typing import List, Optional, Dict, Any
 
 try:
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.prompts import ChatPromptTemplate
-    from langchain_core.output_parsers import StrOutputParser
-    from langchain_core.runnables import RunnablePassthrough, RunnableLambda
     from langchain_core.documents import Document
 except Exception:
-    ChatMistralAI = None
-    ChatPromptTemplate = None
-    StrOutputParser = None
-    RunnablePassthrough = None
-    RunnableLambda = None
     Document = None
 
 from core.vector_store import build_vector_store, load_vector_store, get_retriever
-from core.query_router import classify_query, QueryIntent
-from core.global_metadata import load_video_metadata
+from core.source_types import IngestionResult, ProcessingMetadata
+# NOTE: llm_service is imported lazily when needed, not during ingestion
+from core.logger import get_logger
 
-
-def get_llm():
-    if ChatMistralAI is None:
-        return None
-    return ChatMistralAI(
-        model="mistral-small-latest",
-        mistral_api_key=os.getenv("MISTRAL_API_KEY"),
-        temperature=0.3,
-    )
+logger = get_logger(__name__)
 
 
 def format_docs(docs):
+    """Format retrieved documents for display."""
     return "\n\n".join([doc.page_content for doc in docs])
 
 
-def build_rag_chain(transcript: str, video_id: str = None, metadata: dict = None):
+def build_rag_chain(
+    text: str,
+    metadata: Optional[ProcessingMetadata] = None,
+    video_id: str = None,
+    **kwargs
+):
     """
-    Build RAG chain with enhanced metadata support and context window protection.
+    Build RAG chain for PDF or transcript content.
+    
+    This function:
+    1. Creates vector store from text content
+    2. Returns enhanced RAG chain for querying
+    
+    NO LLM ANALYSIS during this step - just indexing.
+    LLM is used LATER when user asks questions.
     
     Args:
-        transcript: Full transcript text
-        video_id: Optional video ID for global metadata lookup
-        metadata: Optional metadata dict (source, timestamps, etc.)
+        text: Full text content (PDF or transcript)
+        metadata: Optional ProcessingMetadata with source info
+        video_id: Optional ID for backward compatibility
+        **kwargs: Additional metadata for backward compatibility
     
     Returns:
-        Enhanced RAG chain with routing capability
+        EnhancedRAGChain for querying
     """
-    # Context window protection: Check transcript size
-    transcript_length = len(transcript)
-    print(f"[RAG] Building chain for transcript: {transcript_length} chars")
+    text_length = len(text)
+    logger.info(f"[RAG] Building vector store: {text_length} chars")
     
-    if transcript_length > 500000:  # ~125k tokens
-        print(f"[RAG] WARNING: Very long transcript ({transcript_length} chars). "
-              "Some operations may be slow or hit token limits.")
+    if text_length > 500000:  # ~125k tokens
+        logger.warning(
+            f"[RAG] Very long content ({text_length} chars). "
+            "Vector store creation may take time."
+        )
     
-    # Build vector store with metadata
-    vector_store_metadata = metadata or {}
+    # Build vector store metadata
+    vector_metadata = kwargs.get('metadata', {})
+    
+    if metadata:
+        vector_metadata.update({
+            'source_type': metadata.source_type.value,
+            'source': metadata.source,
+            'language': metadata.language or 'unknown',
+            'char_count': metadata.char_count
+        })
+    
     if video_id:
-        vector_store_metadata['video_id'] = video_id
+        vector_metadata['video_id'] = video_id
     
-    vector_store = build_vector_store(transcript, metadata=vector_store_metadata)
+    # Create vector store (local processing - embeddings only, no LLM)
+    logger.info("[RAG] Creating embeddings and building vector store...")
+    logger.info("[RAG] No LLM calls during vector store creation")
     
-    # Create enhanced RAG chain that supports routing
+    vector_store = build_vector_store(text, metadata=vector_metadata)
+    
+    logger.info("[RAG] ✓ Vector store created successfully")
+    
+    # Create enhanced RAG chain
     enhanced_chain = EnhancedRAGChain(
         vector_store=vector_store,
-        video_id=video_id,
-        full_transcript=transcript if transcript_length < 50000 else ""  # Only store if manageable
+        source_id=video_id,
+        metadata=metadata
     )
     
     return enhanced_chain
@@ -78,495 +101,261 @@ def build_rag_chain(transcript: str, video_id: str = None, metadata: dict = None
 
 class EnhancedRAGChain:
     """
-    Enhanced RAG chain with query intent routing and conversation memory.
-    Routes questions to appropriate retrieval strategies.
+    Enhanced RAG chain for querying indexed content.
+    Works uniformly for PDF documents and audio/video transcripts.
+    
+    Query flow:
+    User question → Retrieve relevant chunks → LLM answers using chunks
+    
+    CRITICAL: LLM receives ONLY retrieved chunks, never entire document.
+    
+    ARCHITECTURE: LLM initialization is LAZY - only happens when user asks a question.
     """
     
-    def __init__(self, vector_store, video_id: str = None, full_transcript: str = ""):
+    def __init__(
+        self,
+        vector_store,
+        source_id: str = None,
+        metadata: Optional[ProcessingMetadata] = None
+    ):
         """
         Initialize enhanced RAG chain.
         
         Args:
-            vector_store: Chroma vector store
-            video_id: Optional video ID for metadata lookup
-            full_transcript: Full transcript text for global queries
+            vector_store: Chroma vector store with indexed content
+            source_id: Optional source identifier
+            metadata: Optional ProcessingMetadata
         """
         self.vector_store = vector_store
-        self.video_id = video_id
-        self.full_transcript = full_transcript
-        self.llm = get_llm()
+        self.source_id = source_id
+        self.metadata = metadata
         
-        # Conversation memory (simple list of recent Q&A pairs)
+        # LAZY INITIALIZATION: Do NOT initialize orchestrator here
+        # It will be initialized when user asks first question
+        self._orchestrator = None
+        
+        # Conversation memory
         self.conversation_history = []
-        self.max_history = 5  # Keep last 5 exchanges
+        self.max_history = 5
         
-        # Load global metadata if available
-        self.global_metadata = None
-        if video_id:
-            try:
-                self.global_metadata = load_video_metadata(video_id)
-                if self.global_metadata:
-                    print(f"[EnhancedRAG] Loaded global metadata for {video_id}: "
-                          f"{len(self.global_metadata.topics)} topics, "
-                          f"{len(self.global_metadata.key_concepts)} concepts")
-                else:
-                    print(f"[EnhancedRAG] No global metadata found for {video_id}")
-            except Exception as e:
-                print(f"[EnhancedRAG] Warning: Could not load global metadata: {e}")
+        source_type = metadata.source_type.value if metadata else "unknown"
+        logger.info(f"[EnhancedRAG] Initialized for {source_type} content")
+        logger.info("[EnhancedRAG] Vector store ready, LLM will be initialized on first query")
+    
+    @property
+    def orchestrator(self):
+        """Lazy initialization of RAG orchestrator."""
+        if self._orchestrator is None:
+            logger.info("[EnhancedRAG] Initializing LLM service for query (lazy initialization)")
+            from core.llm_service import get_rag_orchestrator
+            self._orchestrator = get_rag_orchestrator()
+            logger.info("[EnhancedRAG] LLM service ready for queries")
+        return self._orchestrator
+    
+    def ask(self, question: str, top_k: int = 5, debug: bool = False) -> Dict[str, Any]:
+        """
+        Ask a question about the indexed content.
+        
+        Intelligently routes query to:
+        1. Whole-content summarization (map-reduce) for requests like "summarize", "give me 50-word summary"
+        2. Normal RAG retrieval for specific questions
+        
+        Flow for whole-content:
+        1. Detect summarization intent
+        2. Retrieve ALL chunks (not just top-k)
+        3. Hierarchically summarize using map-reduce
+        4. Apply user constraints (word limits, format)
+        
+        Flow for specific questions:
+        1. Retrieve relevant chunks (top-k)
+        2. Send ONLY retrieved chunks to LLM
+        3. Return answer with sources
+        
+        Args:
+            question: User's question
+            top_k: Number of chunks to retrieve (for specific questions)
+            debug: Enable debug logging
+            
+        Returns:
+            Dict with answer, sources, retrieved_chunks, query_type
+        """
+        logger.info(f"[EnhancedRAG] Question: {question[:100]}...")
+        
+        # Import router and processor
+        from core.query_router import get_query_router, QueryType
+        from core.whole_content_processor import get_whole_content_processor
+        
+        # Analyze query intent
+        router = get_query_router()
+        query_intent = router.analyze_query(question)
+        
+        logger.info(f"[EnhancedRAG] Query intent: {query_intent}")
+        
+        # Route based on intent
+        if query_intent.query_type == QueryType.WHOLE_CONTENT_SUMMARY:
+            # Use whole-content processor for summarization
+            logger.info("[EnhancedRAG] Routing to whole-content processor")
+            
+            processor = get_whole_content_processor()
+            answer = processor.process_summary_request(
+                vector_store=self.vector_store,
+                query=question,
+                constraint=query_intent.constraint,
+                metadata=self.metadata.to_dict() if self.metadata else None
+            )
+            
+            result = {
+                'answer': answer,
+                'sources': [],  # Whole content doesn't cite specific chunks
+                'retrieved_chunks': 'all',
+                'query_type': 'whole_content_summary'
+            }
+            
+        else:
+            # Use normal RAG retrieval for specific questions
+            logger.info(f"[EnhancedRAG] Routing to RAG retrieval (top_k={top_k})")
+            
+            # Adjust top_k for extraction queries
+            if query_intent.query_type == QueryType.EXTRACTION:
+                top_k = router.get_retrieval_k(query_intent)
+                logger.info(f"[EnhancedRAG] Adjusted top_k to {top_k} for extraction query")
+            
+            result = self.orchestrator.answer_with_retrieval(
+                vector_store=self.vector_store,
+                question=question,
+                top_k=top_k,
+                conversation_history=self.conversation_history
+            )
+            
+            result['query_type'] = query_intent.query_type.value
+        
+        # Update conversation history
+        if result.get('answer'):
+            self._add_to_history(question, result['answer'])
+        
+        if debug:
+            logger.info(f"[EnhancedRAG] Result: {result}")
+        
+        return result
     
     def _add_to_history(self, question: str, answer: str):
         """Add Q&A pair to conversation history."""
-        self.conversation_history.append({"question": question, "answer": answer})
+        self.conversation_history.append({
+            "question": question,
+            "answer": answer
+        })
         # Keep only recent history
         if len(self.conversation_history) > self.max_history:
             self.conversation_history = self.conversation_history[-self.max_history:]
     
-    def _rewrite_followup_question(self, question: str) -> str:
+    def invoke(self, input_data: Any) -> str:
         """
-        Rewrite follow-up questions into standalone questions using conversation history.
+        Invoke chain with question (for backward compatibility).
         
         Args:
-            question: User's question (may contain references like "it", "the third one")
-            
-        Returns:
-            Rewritten standalone question
-        """
-        # Check if this looks like a follow-up question
-        followup_indicators = [
-            r'\b(it|this|that|they|them|these|those)\b',
-            r'\b(the\s+(first|second|third|fourth|fifth|last|previous))\b',
-            r'\b(what\s+about|how\s+about)\b',
-            r'\b(explain\s+(more|further|that))\b',
-            r'\b(tell\s+me\s+more)\b'
-        ]
-        
-        import re
-        is_followup = any(re.search(pattern, question.lower()) for pattern in followup_indicators)
-        
-        if not is_followup or not self.conversation_history:
-            return question  # Not a follow-up or no history
-        
-        # Use LLM to rewrite with context
-        if self.llm is None or ChatPromptTemplate is None or StrOutputParser is None:
-            return question  # Can't rewrite, return as-is
-        
-        # Get recent context
-        recent_context = "\n".join([
-            f"Q: {h['question']}\nA: {h['answer'][:200]}..."
-            for h in self.conversation_history[-2:]  # Last 2 exchanges
-        ])
-        
-        try:
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are helping rewrite a follow-up question into a standalone question.
-
-Recent conversation:
-{context}
-
-The user's new question may contain references (like "it", "the third one", "that") that refer to the conversation above.
-
-Rewrite the question to be standalone and clear, replacing pronouns and references with specific terms from the conversation.
-
-If the question is already standalone, return it unchanged.
-
-Return ONLY the rewritten question, nothing else."""),
-                ("human", "{question}")
-            ])
-            
-            chain = prompt | self.llm | StrOutputParser()
-            rewritten = chain.invoke({"context": recent_context, "question": question})
-            
-            print(f"[FollowUp] Rewritten: '{question}' → '{rewritten}'")
-            return rewritten.strip()
-            
-        except Exception as e:
-            print(f"[FollowUp] Error rewriting question: {e}")
-            return question  # Return original on error
-    
-    def invoke(self, question: str, debug: bool = False) -> str:
-        """
-        Process question with intent-based routing and conversation memory.
-        
-        Args:
-            question: User's question (may be a follow-up)
-            debug: If True, print debug information
+            input_data: Question string or dict with 'question' key
             
         Returns:
             Answer string
         """
-        # Rewrite follow-up questions into standalone questions
-        standalone_question = self._rewrite_followup_question(question)
+        if isinstance(input_data, dict):
+            question = input_data.get('question') or input_data.get('input', '')
+        else:
+            question = str(input_data)
         
-        # Classify query intent
-        classified = classify_query(standalone_question)
-        
-        if debug:
-            print(f"\n[RAG Debug]")
-            print(f"Original Question: {question}")
-            if standalone_question != question:
-                print(f"Standalone Question: {standalone_question}")
-            print(f"Intent: {classified.intent.value}")
-            print(f"Confidence: {classified.confidence}")
-            print(f"Reasoning: {classified.reasoning}")
-        
-        # Route to appropriate strategy
-        if classified.intent == QueryIntent.GLOBAL_SUMMARY:
-            answer = self._handle_global_summary(standalone_question, debug)
-        elif classified.intent == QueryIntent.TOPIC_EXTRACTION:
-            answer = self._handle_topic_extraction(standalone_question, debug)
-        elif classified.intent == QueryIntent.TIMELINE:
-            answer = self._handle_timeline_query(standalone_question, debug)
-        else:  # LOCAL_QA
-            answer = self._handle_local_qa(standalone_question, debug)
-        
-        # Add to conversation history
-        self._add_to_history(question, answer)
-        
-        return answer
+        result = self.ask(question)
+        return result.get('answer', '')
     
-    def _handle_local_qa(self, question: str, debug: bool = False) -> str:
-        """
-        Handle local/specific questions using vector retrieval.
-        
-        Args:
-            question: User's question
-            debug: Debug mode
-            
-        Returns:
-            Answer
-        """
-        if self.llm is None or ChatPromptTemplate is None or StrOutputParser is None:
-            return "RAG is unavailable because required dependencies are not installed."
-        
-        # Retrieve relevant chunks (increased k for better coverage)
-        retriever = get_retriever(self.vector_store, k=10)  # Increased from 8
-        docs = retriever.invoke(question)
-        
-        if debug:
-            print(f"Retrieved {len(docs)} chunks for local QA")
-            for i, doc in enumerate(docs[:3]):
-                print(f"Chunk {i+1} (score in metadata): {doc.page_content[:100]}...")
-        
-        context = format_docs(docs)
-        
-        # Enhanced prompt with strict grounding
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are an expert assistant analyzing a video/audio transcript.
-
-**CRITICAL RULES:**
-1. Answer ONLY using the context provided below
-2. Do NOT use outside knowledge or general information about topics
-3. Do NOT invent facts, examples, or explanations not in the context
-4. If the answer is not in the context, say: "I could not find this information in the transcript."
-5. Be precise and cite relevant parts of the transcript when possible
-
-**Context from transcript:**
-{context}"""),
-            ("human", "{question}"),
-        ])
-        
-        chain = (
-            {"context": RunnableLambda(lambda x: context), "question": RunnablePassthrough()}
-            | prompt | self.llm | StrOutputParser()
-        )
-        
-        return chain.invoke(question)
-    
-    def _handle_global_summary(self, question: str, debug: bool = False) -> str:
-        """
-        Handle global summary questions using stored metadata or full transcript.
-        
-        Args:
-            question: User's question
-            debug: Debug mode
-            
-        Returns:
-            Answer
-        """
-        if self.llm is None or ChatPromptTemplate is None or StrOutputParser is None:
-            return "Summary unavailable - LLM dependencies not installed."
-        
-        # Try to use precomputed metadata first
-        if self.global_metadata:
-            if debug:
-                print("Using precomputed global metadata for summary")
-            
-            summary = self.global_metadata.summary
-            topics = self.global_metadata.topics
-            concepts = self.global_metadata.key_concepts
-            
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are answering a question about an entire video/audio recording.
-
-You have access to precomputed information about the video:
-
-**Video Summary:**
-{summary}
-
-**Main Topics Discussed:**
-{topics}
-
-**Key Concepts:**
-{concepts}
-
-**CRITICAL RULES:**
-1. Use ONLY the information provided above
-2. Do NOT add topics/concepts from general knowledge
-3. Do NOT invent details not in the summary
-4. Be comprehensive but concise
-
-Answer the user's question based strictly on this global information."""),
-                ("human", "{question}")
-            ])
-            
-            chain = prompt | self.llm | StrOutputParser()
-            return chain.invoke({
-                "summary": summary,
-                "topics": "\n".join(f"• {t}" for t in topics),
-                "concepts": "\n".join(f"• {c}" for c in concepts),
-                "question": question
-            })
-        
-        # Fallback: Use full transcript if available and not too long
-        if self.full_transcript:
-            if debug:
-                print(f"Using full transcript for global summary (length: {len(self.full_transcript)} chars)")
-            
-            # Truncate if too long to fit in context
-            transcript_sample = self.full_transcript[:15000]  # Increased from 8000
-            truncated = len(self.full_transcript) > 15000
-            
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are answering a question about an entire video/audio recording.
-
-{"Below is the complete transcript:" if not truncated else "Below is the transcript (first portion):"}
-
-{transcript}
-
-{"" if not truncated else "Note: This is a partial transcript. Base your answer on what's available."}
-
-**CRITICAL RULES:**
-1. Use ONLY information from the transcript provided
-2. Do NOT add information from general knowledge
-3. Provide a comprehensive answer about the overall content
-
-Answer the user's question about the overall content."""),
-                ("human", "{question}")
-            ])
-            
-            chain = prompt | self.llm | StrOutputParser()
-            return chain.invoke({
-                "transcript": transcript_sample,
-                "truncated": truncated,
-                "question": question
-            })
-        
-        # Last resort: Cannot provide global summary
-        return "Cannot provide a complete summary - neither global metadata nor full transcript is available. Please re-analyze the video to generate global metadata."
-    
-    def _handle_topic_extraction(self, question: str, debug: bool = False) -> str:
-        """
-        Handle topic/concept extraction questions.
-        
-        Args:
-            question: User's question
-            debug: Debug mode
-            
-        Returns:
-            Answer with list of topics/concepts
-        """
-        if self.llm is None or ChatPromptTemplate is None or StrOutputParser is None:
-            return "Topic extraction unavailable - LLM dependencies not installed."
-        
-        # ALWAYS try to use precomputed metadata first for topic extraction
-        if self.global_metadata and (self.global_metadata.topics or self.global_metadata.key_concepts):
-            if debug:
-                print(f"Using precomputed global metadata: {len(self.global_metadata.topics)} topics, "
-                      f"{len(self.global_metadata.key_concepts)} concepts")
-            
-            topics = self.global_metadata.topics
-            concepts = self.global_metadata.key_concepts
-            
-            # Enhanced prompt with strict grounding
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are answering a question about topics and concepts from a video/audio recording.
-
-You have access to precomputed information extracted from the complete transcript:
-
-**Main Topics Discussed:**
-{topics}
-
-**Key Concepts Explained:**
-{concepts}
-
-**CRITICAL RULES:**
-1. Use ONLY the topics and concepts listed above
-2. Do NOT add topics/concepts not in the lists
-3. Do NOT use outside knowledge about these topics
-4. If the user asks for more items than available, explain that only N were discussed
-5. Present information clearly and accurately
-
-Answer the user's question based strictly on the information provided."""),
-                ("human", "{question}")
-            ])
-            
-            chain = prompt | self.llm | StrOutputParser()
-            
-            try:
-                answer = chain.invoke({
-                    "topics": "\n".join(f"{i+1}. {t}" for i, t in enumerate(topics)),
-                    "concepts": "\n".join(f"{i+1}. {c}" for i, c in enumerate(concepts)),
-                    "question": question
-                })
-                return answer
-            except Exception as e:
-                print(f"[EnhancedRAG] Error in topic extraction with metadata: {e}")
-                # Fall through to fallback
-        
-        # Fallback: Use full transcript if available
-        if self.full_transcript and len(self.full_transcript) < 12000:
-            if debug:
-                print("Fallback: Extracting topics from full transcript")
-            
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are analyzing a complete transcript to extract topics and concepts.
-
-**Complete Transcript:**
-{transcript}
-
-**CRITICAL RULES:**
-1. Extract ONLY topics/concepts actually discussed in this transcript
-2. Do NOT add topics from general knowledge
-3. Be specific and accurate
-4. If fewer topics than requested exist, say so clearly
-
-Analyze the transcript and answer the user's question."""),
-                ("human", "{question}")
-            ])
-            
-            chain = prompt | self.llm | StrOutputParser()
-            
-            try:
-                answer = chain.invoke({
-                    "transcript": self.full_transcript,
-                    "question": question
-                })
-                return answer
-            except Exception as e:
-                print(f"[EnhancedRAG] Error in transcript-based extraction: {e}")
-        
-        # Last resort: Extract from retrieved chunks (less reliable)
-        if debug:
-            print("Last resort: Extracting topics from retrieved chunks (may be incomplete)")
-        
-        # Use broader retrieval for topic extraction
-        all_docs = self.vector_store.similarity_search("", k=50)  # Get many chunks
-        
-        if not all_docs:
-            return "Could not extract topics - no transcript chunks available."
-        
-        # Combine chunks (limit to avoid token overflow)
-        combined_text = "\n\n".join([doc.page_content for doc in all_docs[:20]])
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """Analyze these transcript sections and extract the main topics and key concepts.
-
-**WARNING:** You only have access to PORTIONS of the transcript. Be cautious about making definitive statements about "all" topics.
-
-**Transcript Sections:**
-{transcript}
-
-Extract topics and concepts clearly. If the user asks for a specific number, note if you can only identify fewer based on available sections."""),
-            ("human", "{question}")
-        ])
-        
-        chain = prompt | self.llm | StrOutputParser()
-        return chain.invoke({"transcript": combined_text, "question": question})
-    
-    def _handle_timeline_query(self, question: str, debug: bool = False) -> str:
-        """
-        Handle timeline/timestamp questions.
-        
-        Args:
-            question: User's question
-            debug: Debug mode
-            
-        Returns:
-            Answer with timestamp information
-        """
-        # For now, fall back to local QA with increased context
-        # In future: use timestamp metadata from chunks
-        if debug:
-            print("Timeline query - using enhanced retrieval")
-        
-        return self._handle_local_qa(question, debug)
+    def get_metadata(self) -> Optional[ProcessingMetadata]:
+        """Get source metadata."""
+        return self.metadata
 
 
-def load_rag_chain():
-    """Load RAG chain from persistent vector store (backward compatible)."""
-    vector_store = load_vector_store()
-    
-    # Create basic chain for backward compatibility
-    retriever = get_retriever(vector_store)
-
-    llm = get_llm()
-    if llm is None or ChatPromptTemplate is None or StrOutputParser is None or RunnablePassthrough is None or RunnableLambda is None:
-        return None
-
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            """You are an expert meeting assistant. Answer the user's question 
-based ONLY on the meeting transcript context provided below.
-
-If the answer is not found in the context, say: 
-"I could not find this information in the meeting transcript."
-
-Always be concise and precise. If quoting someone, mention it clearly.
-
-Context from meeting transcript:
-{context}""",
-        ),
-        ("human", "{question}"),
-    ])
-
-    rag_chain = (
-        {
-            "context":  retriever| RunnableLambda(format_docs),
-            "question": RunnablePassthrough(),
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-
-    return rag_chain
-
-
-def ask_question(rag_chain, question: str, debug: bool = False) -> str:
+def ask_question(rag_chain: EnhancedRAGChain, question: str, top_k: int = 5, debug: bool = False) -> str:
     """
     Ask a question using RAG chain.
     
+    This is the main entry point for question answering.
+    Intelligently routes to:
+    - Whole-content summarization for "summarize", "give me 50 words", etc.
+    - Normal RAG retrieval for specific questions
+    
     Args:
-        rag_chain: RAG chain (can be EnhancedRAGChain or legacy chain)
+        rag_chain: EnhancedRAGChain instance
         question: User's question
-        debug: Enable debug mode
+        top_k: Number of chunks to retrieve (for specific questions)
+        debug: Enable debug logging
         
     Returns:
         Answer string
     """
-    if rag_chain is None:
-        return "RAG is unavailable because the required LLM dependencies are not installed."
+    result = rag_chain.ask(question, top_k=top_k, debug=debug)
+    return result.get('answer', '')
 
-    print(f"Question: {question}")
-    
-    # Check if it's the enhanced chain
-    if isinstance(rag_chain, EnhancedRAGChain):
-        answer = rag_chain.invoke(question, debug=debug)
-    else:
-        # Legacy chain
-        answer = rag_chain.invoke(question)
-    
-    print(f"Answer: {answer}")
-    return answer
 
+def get_similar_chunks(
+    rag_chain: EnhancedRAGChain,
+    query: str,
+    top_k: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve similar chunks without LLM processing.
+    Useful for debugging or custom processing.
+    
+    Args:
+        rag_chain: EnhancedRAGChain instance
+        query: Search query
+        top_k: Number of chunks to retrieve
+        
+    Returns:
+        List of dicts with content and metadata
+    """
+    logger.info(f"[RAG] Retrieving {top_k} similar chunks")
+    
+    try:
+        retriever = rag_chain.vector_store.as_retriever(search_kwargs={"k": top_k})
+        docs = retriever.get_relevant_documents(query)
+        
+        chunks = []
+        for doc in docs:
+            chunks.append({
+                'content': doc.page_content,
+                'metadata': doc.metadata if hasattr(doc, 'metadata') else {}
+            })
+        
+        logger.info(f"[RAG] Retrieved {len(chunks)} chunks")
+        return chunks
+        
+    except Exception as e:
+        logger.error(f"[RAG] Retrieval error: {e}")
+        return []
+
+
+def load_rag_chain(video_id: str = None):
+    """
+    Load RAG chain from persistent vector store.
+    
+    Args:
+        video_id: Optional video/source ID
+        
+    Returns:
+        EnhancedRAGChain or None
+    """
+    try:
+        vector_store = load_vector_store()
+        
+        if vector_store is None:
+            return None
+        
+        # Create enhanced chain
+        enhanced_chain = EnhancedRAGChain(
+            vector_store=vector_store,
+            source_id=video_id,
+            metadata=None
+        )
+        
+        return enhanced_chain
+        
+    except Exception as e:
+        logger.error(f"[RAG] Error loading chain: {e}")
+        return None
