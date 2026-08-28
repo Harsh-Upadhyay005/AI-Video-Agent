@@ -7,6 +7,10 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 # Load environment variables
 load_dotenv()
 
@@ -15,18 +19,19 @@ try:
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
-    print("[Supabase] Warning: supabase-py not installed. Supabase features disabled.")
+    logger.warning("[Supabase] supabase-py not installed. Install with: pip install supabase")
 
 
 class SupabaseClient:
     """
     Singleton Supabase client manager.
-    Provides access to Supabase storage and database.
+    Provides access to Supabase storage and database with proper validation.
     """
     
     _instance: Optional['SupabaseClient'] = None
     _client: Optional[Client] = None
     _initialized: bool = False
+    _initialization_error: Optional[str] = None
     
     def __new__(cls):
         if cls._instance is None:
@@ -42,23 +47,103 @@ class SupabaseClient:
     def _initialize_client(self):
         """Initialize Supabase client with credentials from environment."""
         if not SUPABASE_AVAILABLE:
-            print("[Supabase] Supabase SDK not available. Install with: pip install supabase")
+            self._initialization_error = "Supabase SDK not installed"
+            logger.warning(
+                "[Supabase] SDK not available. "
+                "Install with: pip install supabase"
+            )
             return
         
         # Get credentials from environment
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        # Check common variations
+        supabase_url = (
+            os.getenv("SUPABASE_URL") or 
+            os.getenv("SUPABASE_PROJECT_URL")
+        )
+        supabase_key = (
+            os.getenv("SUPABASE_ANON_KEY") or 
+            os.getenv("SUPABASE_KEY") or
+            os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        )
         
-        if not supabase_url or not supabase_key:
-            print("[Supabase] Warning: SUPABASE_URL or SUPABASE_ANON_KEY not set in .env")
-            print("[Supabase] Supabase features will be disabled")
+        # Validate credentials
+        url_configured = bool(supabase_url and supabase_url.strip())
+        key_configured = bool(supabase_key and supabase_key.strip())
+        
+        logger.info(f"[Supabase] Configuration check:")
+        logger.info(f"  - URL configured: {'Yes' if url_configured else 'No'}")
+        logger.info(f"  - API key configured: {'Yes' if key_configured else 'No'}")
+        
+        if not url_configured or not key_configured:
+            missing = []
+            if not url_configured:
+                missing.append("SUPABASE_URL")
+            if not key_configured:
+                missing.append("SUPABASE_ANON_KEY")
+            
+            self._initialization_error = f"Missing credentials: {', '.join(missing)}"
+            logger.warning(
+                f"[Supabase] Configuration incomplete: {', '.join(missing)} not set in .env"
+            )
+            logger.info("[Supabase] Supabase features will be disabled")
+            logger.info("[Supabase] System will use local file storage as fallback")
             return
         
+        # Additional validation
+        if not supabase_url.startswith(('http://', 'https://')):
+            self._initialization_error = "Invalid URL format"
+            logger.error(f"[Supabase] Invalid URL format: must start with http:// or https://")
+            return
+        
+        if len(supabase_key) < 20:
+            self._initialization_error = "Invalid API key (too short)"
+            logger.error(f"[Supabase] Invalid API key: key appears too short (got {len(supabase_key)} chars, expected 100+)")
+            logger.error(f"[Supabase] Please check your SUPABASE_ANON_KEY in .env file")
+            logger.error(f"[Supabase] It should be a long JWT token starting with 'eyJ...'")
+            return
+        
+        # Try to initialize client
         try:
             self._client = create_client(supabase_url, supabase_key)
-            print(f"[Supabase] Client initialized successfully: {supabase_url}")
+            
+            # Log only safe information
+            # Mask the URL to show just the project ID
+            masked_url = supabase_url
+            if 'supabase.co' in supabase_url:
+                parts = supabase_url.split('/')
+                for i, part in enumerate(parts):
+                    if 'supabase.co' in part:
+                        project_id = part.split('.')[0].replace('https://', '').replace('http://', '')
+                        masked_url = f"https://{project_id[:4]}******.supabase.co"
+                        break
+            
+            logger.info(f"[Supabase] Client initialized successfully")
+            logger.info(f"  - Project: {masked_url}")
+            logger.info(f"  - Features: Storage, Database, Realtime")
+            
         except Exception as e:
-            print(f"[Supabase] Failed to initialize client: {e}")
+            self._initialization_error = str(e)
+            error_msg = str(e).lower()
+            
+            # Provide specific error guidance
+            if "invalid api key" in error_msg or "401" in error_msg:
+                logger.error(
+                    "[Supabase] Invalid API key. "
+                    "Please check SUPABASE_ANON_KEY in your .env file"
+                )
+            elif "not found" in error_msg or "404" in error_msg:
+                logger.error(
+                    "[Supabase] Project not found. "
+                    "Please check SUPABASE_URL in your .env file"
+                )
+            elif "network" in error_msg or "connection" in error_msg:
+                logger.error(
+                    "[Supabase] Network error. "
+                    "Please check your internet connection"
+                )
+            else:
+                logger.error(f"[Supabase] Failed to initialize: {e}")
+            
             self._client = None
     
     @property
@@ -71,16 +156,25 @@ class SupabaseClient:
         """Check if Supabase client is available and configured."""
         return self._client is not None
     
+    @property
+    def initialization_error(self) -> Optional[str]:
+        """Get initialization error if any."""
+        return self._initialization_error
+    
     def get_storage(self):
         """Get Supabase storage client."""
         if not self.is_available:
-            raise RuntimeError("Supabase client not available")
+            raise RuntimeError(
+                f"Supabase not available: {self._initialization_error or 'Not configured'}"
+            )
         return self._client.storage
     
     def get_database(self):
         """Get Supabase database client."""
         if not self.is_available:
-            raise RuntimeError("Supabase client not available")
+            raise RuntimeError(
+                f"Supabase not available: {self._initialization_error or 'Not configured'}"
+            )
         return self._client
 
 
@@ -106,7 +200,30 @@ def is_supabase_configured() -> bool:
     Check if Supabase is configured and available.
     
     Returns:
-        True if Supabase is configured, False otherwise
+        True if Supabase is configured and ready, False otherwise
     """
     client = get_supabase_client()
     return client.is_available
+
+
+def get_supabase_status() -> dict:
+    """
+    Get detailed Supabase configuration status.
+    
+    Returns:
+        Dictionary with status information
+    """
+    client = get_supabase_client()
+    
+    return {
+        "available": client.is_available,
+        "sdk_installed": SUPABASE_AVAILABLE,
+        "error": client.initialization_error,
+        "url_configured": bool(os.getenv("SUPABASE_URL")),
+        "key_configured": bool(
+            os.getenv("SUPABASE_ANON_KEY") or 
+            os.getenv("SUPABASE_KEY") or
+            os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        )
+    }
+
