@@ -40,6 +40,7 @@ chromadb==0.5.3                   # Local vector database
 sentence-transformers==3.0.1      # HuggingFace sentence embeddings
 huggingface-hub==0.24.6           # Model downloading from HuggingFace
 tiktoken==0.7.0                   # Token counting for text splitting
+rank-bm25==0.2.2                  # BM25 sparse retrieval for hybrid search
 
 # ── Utilities ────────────────────────────────────────────────────────────────
 python-dotenv==1.0.1              # Load environment variables from .env
