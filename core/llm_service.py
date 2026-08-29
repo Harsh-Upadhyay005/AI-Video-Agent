@@ -307,7 +307,8 @@ class RAGLLMOrchestrator:
         vector_store,
         question: str,
         top_k: int = 5,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        custom_retriever=None
     ) -> Dict[str, Any]:
         """
         Answer question using RAG: Retrieve → LLM.
@@ -315,8 +316,9 @@ class RAGLLMOrchestrator:
         Args:
             vector_store: Vector store to retrieve from
             question: User's question
-            top_k: Number of chunks to retrieve
+            top_k: Number of chunks to retrieve (ignored if custom_retriever provided)
             conversation_history: Optional conversation history
+            custom_retriever: Optional custom retriever (hybrid + reranked)
             
         Returns:
             Dict with answer, sources, retrieved_chunks
@@ -325,7 +327,13 @@ class RAGLLMOrchestrator:
         
         try:
             # STEP 1: Retrieve relevant context (NOT entire document)
-            retriever = vector_store.as_retriever(search_kwargs={"k": top_k})
+            if custom_retriever:
+                logger.info("[RAGOrchestrator] Using custom retriever (hybrid+reranked)")
+                retriever = custom_retriever
+            else:
+                logger.info("[RAGOrchestrator] Using default dense retriever")
+                retriever = vector_store.as_retriever(search_kwargs={"k": top_k})
+            
             retrieved_docs = retriever.invoke(question)
             
             logger.info(f"[RAGOrchestrator] Retrieved {len(retrieved_docs)} chunks")
