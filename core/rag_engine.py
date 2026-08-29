@@ -20,7 +20,7 @@ try:
 except Exception:
     Document = None
 
-from core.vector_store import build_vector_store, load_vector_store, get_retriever
+from core.vector_store import build_vector_store, load_vector_store, get_retriever, _load_documents
 from core.source_types import IngestionResult, ProcessingMetadata
 # NOTE: llm_service is imported lazily when needed, not during ingestion
 from core.logger import get_logger
@@ -44,7 +44,8 @@ def build_rag_chain(
     
     This function:
     1. Creates vector store from text content
-    2. Returns enhanced RAG chain for querying
+    2. Persists documents for BM25 retrieval
+    3. Returns enhanced RAG chain for querying with hybrid search
     
     NO LLM ANALYSIS during this step - just indexing.
     LLM is used LATER when user asks questions.
@@ -87,13 +88,21 @@ def build_rag_chain(
     
     vector_store = build_vector_store(text, metadata=vector_metadata)
     
+    # Load persisted documents for BM25
+    docs = _load_documents(video_id)
+    if docs:
+        logger.info(f"[RAG] ✓ Loaded {len(docs)} documents for hybrid search")
+    else:
+        logger.warning("[RAG] No documents loaded - hybrid search will fallback to dense-only")
+    
     logger.info("[RAG] ✓ Vector store created successfully")
     
-    # Create enhanced RAG chain
+    # Create enhanced RAG chain with documents
     enhanced_chain = EnhancedRAGChain(
         vector_store=vector_store,
         source_id=video_id,
-        metadata=metadata
+        metadata=metadata,
+        docs=docs
     )
     
     return enhanced_chain
@@ -116,7 +125,8 @@ class EnhancedRAGChain:
         self,
         vector_store,
         source_id: str = None,
-        metadata: Optional[ProcessingMetadata] = None
+        metadata: Optional[ProcessingMetadata] = None,
+        docs: Optional[List[Document]] = None
     ):
         """
         Initialize enhanced RAG chain.
@@ -125,10 +135,12 @@ class EnhancedRAGChain:
             vector_store: Chroma vector store with indexed content
             source_id: Optional source identifier
             metadata: Optional ProcessingMetadata
+            docs: Optional list of Document chunks (for BM25 retrieval)
         """
         self.vector_store = vector_store
         self.source_id = source_id
         self.metadata = metadata
+        self.docs = docs  # Store for hybrid retrieval
         
         # LAZY INITIALIZATION: Do NOT initialize orchestrator here
         # It will be initialized when user asks first question
@@ -220,11 +232,31 @@ class EnhancedRAGChain:
                 top_k = router.get_retrieval_k(query_intent)
                 logger.info(f"[EnhancedRAG] Adjusted top_k to {top_k} for extraction query")
             
+            # Create hybrid + reranked retriever if documents available
+            custom_retriever = None
+            if self.docs:
+                try:
+                    from core.vector_store import get_reranked_retriever
+                    logger.info("[EnhancedRAG] Creating hybrid + reranked retriever")
+                    custom_retriever = get_reranked_retriever(
+                        vector_store=self.vector_store,
+                        docs=self.docs,
+                        fetch_k=top_k * 4,  # Fetch 4x for reranking
+                        top_n=top_k,
+                        use_hybrid=True
+                    )
+                except Exception as e:
+                    logger.warning(f"[EnhancedRAG] Failed to create hybrid retriever: {e}")
+                    logger.warning("[EnhancedRAG] Falling back to dense-only retrieval")
+            else:
+                logger.info("[EnhancedRAG] No documents available - using dense-only retrieval")
+            
             result = self.orchestrator.answer_with_retrieval(
                 vector_store=self.vector_store,
                 question=question,
                 top_k=top_k,
-                conversation_history=self.conversation_history
+                conversation_history=self.conversation_history,
+                custom_retriever=custom_retriever
             )
             
             result['query_type'] = query_intent.query_type.value
