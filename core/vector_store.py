@@ -1,13 +1,40 @@
+"""
+Vector Store with Hybrid Search (BM25 + Dense) and Cross-Encoder Reranking.
+
+Architecture:
+1. Dense retrieval: Chroma with all-MiniLM-L6-v2 embeddings (semantic search)
+2. Sparse retrieval: BM25 (keyword/lexical search)
+3. Hybrid: EnsembleRetriever combining both
+4. Reranking: Cross-encoder for final relevance scoring
+
+Persistence:
+- Chroma: Persisted to disk in CHROMA_DIR
+- BM25: In-memory, rebuilt from persisted documents (stored as pickle)
+"""
+
 import os 
 import hashlib
-from langchain_chroma import Chroma
+import pickle
+from typing import List, Optional
+from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from core.logger import get_logger
+
+logger = get_logger(__name__)
 
 CHROMA_DIR = "vector_db"
+DOCS_DIR = "vector_db_docs"  # Store chunked documents for BM25
 COLLECTION_NAME = "meeting_transcript"  # Default for backward compatibility
-EMBEDDING_MODEL  = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
+# Hybrid search configuration
+HYBRID_DENSE_WEIGHT = 0.5   # Weight for dense (embedding) retrieval
+HYBRID_SPARSE_WEIGHT = 0.5  # Weight for sparse (BM25) retrieval
+
+# Ensure docs directory exists
+os.makedirs(DOCS_DIR, exist_ok=True)
 
 
 def _get_collection_name(video_id: str = None) -> str:
@@ -48,6 +75,7 @@ def get_embeddings():
 def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     """
     Build vector store from transcript with optional metadata.
+    Also persists chunked documents for BM25 retrieval.
     
     Args:
         transcript: Full transcript text
@@ -56,7 +84,7 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     Returns:
         Chroma vector store
     """
-    print("Building vector Store")
+    logger.info("[VectorStore] Building vector store with hybrid search support")
 
     # Increased chunk size to preserve semantic coherence
     # Larger chunks help keep complete concepts together
@@ -92,25 +120,235 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
         persist_directory=CHROMA_DIR
     )
 
-    print(f"[VectorStore] Created {len(docs)} document chunks in collection '{collection_name}'")
+    # Persist documents for BM25 retrieval
+    _persist_documents(docs, video_id)
+
+    logger.info(f"[VectorStore] ✓ Created {len(docs)} chunks in collection '{collection_name}'")
+    logger.info("[VectorStore] ✓ Documents persisted for BM25 retrieval")
     return vector_store
 
 
 
-def load_vector_store() ->Chroma:
+def load_vector_store() -> Chroma:
     embeddings = get_embeddings()
     vector_store = Chroma(
         collection_name=COLLECTION_NAME,
-        embedding_function= embeddings,
+        embedding_function=embeddings,
         persist_directory=CHROMA_DIR
     )
-
     return vector_store
 
-def get_retriever(vector_store : Chroma, k :int = 4):
+
+def get_retriever(vector_store: Chroma, k: int = 4):
+    """
+    Get basic dense retriever (for backward compatibility).
+    
+    For better results, use get_hybrid_retriever or get_reranked_retriever.
+    """
     return vector_store.as_retriever(
-        search_type = 'similarity',
-        search_kwargs = {"k":k}
+        search_type='similarity',
+        search_kwargs={"k": k}
     )
+
+
+def _persist_documents(docs: List[Document], video_id: str = None):
+    """
+    Persist chunked documents for BM25 retrieval.
+    
+    BM25Retriever is in-memory and needs documents to be rebuilt on load.
+    We persist them as pickle files keyed by video_id.
+    
+    Args:
+        docs: List of Document chunks
+        video_id: Video/source identifier
+    """
+    try:
+        collection_name = _get_collection_name(video_id)
+        docs_path = os.path.join(DOCS_DIR, f"{collection_name}_docs.pkl")
+        
+        with open(docs_path, 'wb') as f:
+            pickle.dump(docs, f)
+        
+        logger.info(f"[VectorStore] ✓ Persisted {len(docs)} documents to {docs_path}")
+        
+    except Exception as e:
+        logger.error(f"[VectorStore] Failed to persist documents: {e}")
+
+
+def _load_documents(video_id: str = None) -> Optional[List[Document]]:
+    """
+    Load persisted documents for BM25 retrieval.
+    
+    Args:
+        video_id: Video/source identifier
+        
+    Returns:
+        List of Document chunks or None if not found
+    """
+    try:
+        collection_name = _get_collection_name(video_id)
+        docs_path = os.path.join(DOCS_DIR, f"{collection_name}_docs.pkl")
+        
+        if not os.path.exists(docs_path):
+            logger.warning(f"[VectorStore] No persisted documents found at {docs_path}")
+            return None
+        
+        with open(docs_path, 'rb') as f:
+            docs = pickle.load(f)
+        
+        logger.info(f"[VectorStore] ✓ Loaded {len(docs)} persisted documents")
+        return docs
+        
+    except Exception as e:
+        logger.error(f"[VectorStore] Failed to load documents: {e}")
+        return None
+
+
+def get_bm25_retriever(docs: List[Document], k: int = 20):
+    """
+    Create BM25 sparse retriever from documents.
+    
+    BM25 is a keyword-based ranking function that excels at:
+    - Exact keyword matches
+    - Proper nouns and named entities
+    - Technical terms
+    
+    Args:
+        docs: List of Document chunks
+        k: Number of documents to retrieve
+        
+    Returns:
+        BM25Retriever instance or None if unavailable
+    """
+    try:
+        from langchain_community.retrievers import BM25Retriever
+        
+        logger.info(f"[VectorStore] Creating BM25 retriever with {len(docs)} docs")
+        
+        bm25_retriever = BM25Retriever.from_documents(docs)
+        bm25_retriever.k = k
+        
+        logger.info(f"[VectorStore] ✓ BM25 retriever created (k={k})")
+        return bm25_retriever
+        
+    except ImportError:
+        logger.warning("[VectorStore] BM25Retriever not available (install rank-bm25)")
+        return None
+    except Exception as e:
+        logger.error(f"[VectorStore] Failed to create BM25 retriever: {e}")
+        return None
+
+
+def get_hybrid_retriever(
+    vector_store: Chroma,
+    docs: List[Document],
+    k: int = 20,
+    dense_weight: float = HYBRID_DENSE_WEIGHT,
+    sparse_weight: float = HYBRID_SPARSE_WEIGHT
+):
+    """
+    Create hybrid retriever combining dense (Chroma) and sparse (BM25) search.
+    
+    Hybrid search combines:
+    - Dense retrieval: Semantic similarity via embeddings (good for concepts)
+    - Sparse retrieval: Keyword matching via BM25 (good for exact terms)
+    
+    The EnsembleRetriever merges results using weighted reciprocal rank fusion.
+    
+    Args:
+        vector_store: Chroma vector store
+        docs: Document chunks (for BM25)
+        k: Number of candidates to fetch from each retriever
+        dense_weight: Weight for dense retriever (default: 0.5)
+        sparse_weight: Weight for sparse retriever (default: 0.5)
+        
+    Returns:
+        EnsembleRetriever or fallback to dense-only retriever
+    """
+    try:
+        from langchain.retrievers import EnsembleRetriever
+        
+        logger.info(f"[VectorStore] Creating hybrid retriever (k={k})")
+        
+        # Dense retriever (embeddings)
+        dense_retriever = vector_store.as_retriever(
+            search_type='similarity',
+            search_kwargs={"k": k}
+        )
+        
+        # Sparse retriever (BM25)
+        sparse_retriever = get_bm25_retriever(docs, k=k)
+        
+        if sparse_retriever is None:
+            logger.warning("[VectorStore] BM25 unavailable, using dense-only retrieval")
+            return dense_retriever
+        
+        # Combine with ensemble
+        ensemble_retriever = EnsembleRetriever(
+            retrievers=[dense_retriever, sparse_retriever],
+            weights=[dense_weight, sparse_weight]
+        )
+        
+        logger.info(
+            f"[VectorStore] ✓ Hybrid retriever created "
+            f"(dense={dense_weight}, sparse={sparse_weight})"
+        )
+        return ensemble_retriever
+        
+    except ImportError as e:
+        logger.warning(f"[VectorStore] EnsembleRetriever not available: {e}")
+        logger.warning("[VectorStore] Falling back to dense-only retrieval")
+        return vector_store.as_retriever(search_kwargs={"k": k})
+    except Exception as e:
+        logger.error(f"[VectorStore] Failed to create hybrid retriever: {e}")
+        logger.warning("[VectorStore] Falling back to dense-only retrieval")
+        return vector_store.as_retriever(search_kwargs={"k": k})
+
+
+def get_reranked_retriever(
+    vector_store: Chroma,
+    docs: List[Document],
+    fetch_k: int = 20,
+    top_n: int = 5,
+    use_hybrid: bool = True
+):
+    """
+    Create retriever with cross-encoder reranking.
+    
+    Full pipeline:
+    1. Hybrid retrieval: Fetch fetch_k candidates (dense + sparse)
+    2. Cross-encoder reranking: Score all (query, doc) pairs
+    3. Return top_n highest-scoring documents
+    
+    Args:
+        vector_store: Chroma vector store
+        docs: Document chunks (for BM25)
+        fetch_k: Number of candidates to fetch before reranking
+        top_n: Number of final documents after reranking
+        use_hybrid: Use hybrid search (True) or dense-only (False)
+        
+    Returns:
+        ContextualCompressionRetriever with reranking or base retriever
+    """
+    from core.reranker import get_reranked_retriever as wrap_with_reranker
+    
+    # Get base retriever (hybrid or dense)
+    if use_hybrid:
+        base_retriever = get_hybrid_retriever(vector_store, docs, k=fetch_k)
+    else:
+        base_retriever = vector_store.as_retriever(search_kwargs={"k": fetch_k})
+    
+    # Wrap with cross-encoder reranking
+    reranked_retriever = wrap_with_reranker(
+        base_retriever=base_retriever,
+        top_n=top_n
+    )
+    
+    logger.info(
+        f"[VectorStore] ✓ Reranked retriever ready "
+        f"(hybrid={use_hybrid}, fetch_k={fetch_k}, top_n={top_n})"
+    )
+    
+    return reranked_retriever
 
 
