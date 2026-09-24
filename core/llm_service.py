@@ -334,8 +334,25 @@ class RAGLLMOrchestrator:
                 logger.info("[RAGOrchestrator] Using default dense retriever")
                 retriever = vector_store.as_retriever(search_kwargs={"k": top_k})
             
-            retrieved_docs = retriever.invoke(question)
+            retrieved_docs = None
+            if hasattr(retriever, "invoke"):
+                retrieved_docs = retriever.invoke(question)
+            elif hasattr(retriever, "get_relevant_documents"):
+                retrieved_docs = retriever.get_relevant_documents(question)
+            else:
+                raise TypeError(f"Retriever {type(retriever).__name__} has no invoke/get_relevant_documents")
             
+            if retrieved_docs and not hasattr(retrieved_docs[0], "page_content"):
+                # Ensemble / compressor may wrap results unexpectedly
+                normalized = []
+                for item in retrieved_docs:
+                    if hasattr(item, "page_content"):
+                        normalized.append(item)
+                    elif isinstance(item, tuple) and item and hasattr(item[0], "page_content"):
+                        normalized.append(item[0])
+                retrieved_docs = normalized
+            
+            retrieved_docs = retrieved_docs or []
             logger.info(f"[RAGOrchestrator] Retrieved {len(retrieved_docs)} chunks")
             
             if not retrieved_docs:
