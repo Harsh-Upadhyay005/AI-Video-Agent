@@ -33,7 +33,7 @@ class SecretsManager:
     # Environment variable keys that contain sensitive data
     SENSITIVE_ENV_KEYS = {
         'MISTRAL_API_KEY',
-        'SARVAM_ANON_KEY',
+        'SARVAM_API_KEY',
         'API_KEY',
         'SECRET_KEY',
         'PASSWORD',
@@ -235,12 +235,12 @@ class SecretsManager:
             for pattern in placeholder_patterns:
                 if pattern.lower() in env_content.lower():
                     issues.append(
-                        f"⚠️  .env file contains placeholder value '{pattern}'. "
+                        f"   .env file contains placeholder value '{pattern}'. "
                         "Replace with actual values."
                     )
                     break
         except Exception as e:
-            issues.append(f"⚠️  Could not read .env file: {str(e)}")
+            issues.append(f"   Could not read .env file: {str(e)}")
         
         return issues
     
@@ -356,41 +356,40 @@ def perform_security_check() -> bool:
     Returns:
         True if all security checks pass
     """
-    print("\n" + "=" * 80)
-    print("{lock} AI Video Agent - Security Check")
-    print("=" * 80 + "\n")
+    logger.info("=" * 80)
+    logger.info("AI Video Agent - Security Check")
+    logger.info("=" * 80)
     
     all_passed = True
     
     # Check secrets validation
-    print(" Validating Secrets...")
+    logger.info("Validating Secrets...")
     secrets_result = SecretsManager.validate_secrets()
     
     if secrets_result["missing"]:
-        print(f"[wrong] Missing secrets: {', '.join(secrets_result['missing'])}")
+        logger.error(f"Missing secrets: {', '.join(secrets_result['missing'])}")
         all_passed = False
     
     if secrets_result["invalid"]:
-        print(f"[wrong] Invalid secrets: {', '.join(secrets_result['invalid'])}")
+        logger.error(f"Invalid secrets: {', '.join(secrets_result['invalid'])}")
         all_passed = False
     
     if secrets_result["valid"]:
-        print("[okay] All required secrets are properly configured")
+        logger.info("All required secrets are properly configured")
     
     # Show warnings
     if secrets_result["warnings"]:
-        print("\n[warning]  Security Warnings:")
+        logger.warning("Security Warnings:")
         for warning in secrets_result["warnings"]:
-            print(f"   {warning}")
-        print()
+            logger.warning(f"  {warning}")
     
-    print("=" * 80)
+    logger.info("=" * 80)
     if all_passed and not secrets_result["warnings"]:
-        print("[okay] Security Check Complete - No issues found")
+        logger.info("Security Check Complete - No issues found")
     elif all_passed:
-        print("[warning]  Security Check Complete - Review warnings above")
+        logger.warning("Security Check Complete - Review warnings above")
     else:
-        print("[wrong] Security Check Failed - Fix issues above")
-    print("=" * 80 + "\n")
+        logger.error("Security Check Failed - Fix issues above")
+    logger.info("=" * 80)
     
     return all_passed

@@ -123,20 +123,51 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     # Persist documents for BM25 retrieval
     _persist_documents(docs, video_id)
 
-    logger.info(f"[VectorStore] ✓ Created {len(docs)} chunks in collection '{collection_name}'")
-    logger.info("[VectorStore] ✓ Documents persisted for BM25 retrieval")
+    logger.info(f"[VectorStore]   Created {len(docs)} chunks in collection '{collection_name}'")
+    logger.info("[VectorStore]   Documents persisted for BM25 retrieval")
     return vector_store
 
 
 
-def load_vector_store() -> Chroma:
+def load_vector_store(video_id: str = None) -> Optional[Chroma]:
+    """
+    Load a persisted Chroma collection for a source.
+    
+    Args:
+        video_id: Job/session ID used when the collection was created.
+    """
     embeddings = get_embeddings()
-    vector_store = Chroma(
-        collection_name=COLLECTION_NAME,
-        embedding_function=embeddings,
-        persist_directory=CHROMA_DIR
-    )
-    return vector_store
+    collection_name = _get_collection_name(video_id)
+    
+    try:
+        vector_store = Chroma(
+            collection_name=collection_name,
+            embedding_function=embeddings,
+            persist_directory=CHROMA_DIR
+        )
+        
+        count = 0
+        try:
+            count = vector_store._collection.count()
+        except Exception:
+            try:
+                count = len(vector_store.get().get("ids") or [])
+            except Exception:
+                count = 0
+        
+        if count == 0:
+            logger.warning(
+                f"[VectorStore] Collection '{collection_name}' is empty or missing"
+            )
+            return None
+        
+        logger.info(
+            f"[VectorStore]   Loaded collection '{collection_name}' ({count} chunks)"
+        )
+        return vector_store
+    except Exception as e:
+        logger.error(f"[VectorStore] Failed to load collection '{collection_name}': {e}")
+        return None
 
 
 def get_retriever(vector_store: Chroma, k: int = 4):
@@ -169,7 +200,7 @@ def _persist_documents(docs: List[Document], video_id: str = None):
         with open(docs_path, 'wb') as f:
             pickle.dump(docs, f)
         
-        logger.info(f"[VectorStore] ✓ Persisted {len(docs)} documents to {docs_path}")
+        logger.info(f"[VectorStore]   Persisted {len(docs)} documents to {docs_path}")
         
     except Exception as e:
         logger.error(f"[VectorStore] Failed to persist documents: {e}")
@@ -196,7 +227,7 @@ def _load_documents(video_id: str = None) -> Optional[List[Document]]:
         with open(docs_path, 'rb') as f:
             docs = pickle.load(f)
         
-        logger.info(f"[VectorStore] ✓ Loaded {len(docs)} persisted documents")
+        logger.info(f"[VectorStore]   Loaded {len(docs)} persisted documents")
         return docs
         
     except Exception as e:
@@ -228,7 +259,7 @@ def get_bm25_retriever(docs: List[Document], k: int = 20):
         bm25_retriever = BM25Retriever.from_documents(docs)
         bm25_retriever.k = k
         
-        logger.info(f"[VectorStore] ✓ BM25 retriever created (k={k})")
+        logger.info(f"[VectorStore]   BM25 retriever created (k={k})")
         return bm25_retriever
         
     except ImportError:
@@ -266,7 +297,10 @@ def get_hybrid_retriever(
         EnsembleRetriever or fallback to dense-only retriever
     """
     try:
-        from langchain.retrievers import EnsembleRetriever
+        try:
+            from langchain.retrievers import EnsembleRetriever
+        except ImportError:
+            from langchain_community.retrievers import EnsembleRetriever
         
         logger.info(f"[VectorStore] Creating hybrid retriever (k={k})")
         
@@ -290,7 +324,7 @@ def get_hybrid_retriever(
         )
         
         logger.info(
-            f"[VectorStore] ✓ Hybrid retriever created "
+            f"[VectorStore]   Hybrid retriever created "
             f"(dense={dense_weight}, sparse={sparse_weight})"
         )
         return ensemble_retriever
@@ -345,7 +379,7 @@ def get_reranked_retriever(
     )
     
     logger.info(
-        f"[VectorStore] ✓ Reranked retriever ready "
+        f"[VectorStore]   Reranked retriever ready "
         f"(hybrid={use_hybrid}, fetch_k={fetch_k}, top_n={top_n})"
     )
     
