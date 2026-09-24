@@ -92,7 +92,7 @@ class AnalysisService:
                 analysis_request=analysis_request
             )
             
-            logger.info(f"[AnalysisService] ✓ {analysis_type.value} analysis complete")
+            logger.info(f"[AnalysisService]   {analysis_type.value} analysis complete")
             
             return {
                 "analysis_type": analysis_type.value,
@@ -270,7 +270,7 @@ class AnalysisService:
             )
             results[analysis_type.value] = result
         
-        logger.info("[AnalysisService] ✓ Batch analysis complete")
+        logger.info("[AnalysisService]   Batch analysis complete")
         
         return results
 

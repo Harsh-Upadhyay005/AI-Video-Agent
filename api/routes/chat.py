@@ -2,14 +2,16 @@
 RAG-based chat endpoints for querying meeting transcripts.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Any, List, Dict
+
+import os
 
 from core.validators import InputValidator
 from core.logger import get_logger
 from core.exceptions import ValidationError
-from core.rag_engine import ask_question, load_rag_chain
+from core.auth_middleware import get_current_user, AuthUser
 from main import get_rag_chain_for_source
 
 logger = get_logger(__name__)
@@ -37,10 +39,15 @@ class ChatResponse(BaseModel):
     """Response model for chat queries."""
     answer: str
     session_id: Optional[str] = None
+    sources: Optional[List[Dict[str, Any]]] = None
+    query_type: Optional[str] = None
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat_with_transcript(request: ChatRequest):
+async def chat_with_transcript(
+    request: ChatRequest,
+    current_user: AuthUser = Depends(get_current_user)
+):
     """
     Ask questions about a previously analyzed transcript using intelligent RAG.
     
@@ -62,9 +69,9 @@ async def chat_with_transcript(request: ChatRequest):
     Returns an AI-generated answer based on the content.
     
     RAG Chain Retrieval Strategy:
-    1. If session_id provided, use that specific RAG chain
-    2. Otherwise, use the most recently stored RAG chain
-    3. If none found, return error with helpful message
+    1. If session_id is provided, use that RAG chain only
+    2. If the session is missing, return 404 (do not use another user's content)
+    3. In development only, a missing session_id may use the most recent chain
     """
     try:
         # Validate question
@@ -72,40 +79,41 @@ async def chat_with_transcript(request: ChatRequest):
         
         logger.info(f"[Chat] Processing query: {validated_question[:100]}...")
         
-        # Try to get RAG chain from session/job
         rag_chain = None
+        session_id = str(request.session_id).strip() if request.session_id else ""
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        debug_mode = bool(request.debug) and environment != "production"
         
-        if request.session_id:
-            logger.info(f"[Chat] Looking for session: {request.session_id}")
-            rag_chain = get_rag_chain_for_source(request.session_id)
+        if session_id:
+            logger.info(f"[Chat] Looking for session: {session_id}")
+            rag_chain = get_rag_chain_for_source(session_id)
             
             if rag_chain:
-                logger.info(f"[Chat] ✓ Found RAG chain for session: {request.session_id}")
+                logger.info(f"[Chat]   Found RAG chain for session: {session_id}")
             else:
-                logger.warning(f"[Chat] ✗ No RAG chain found for session: {request.session_id}")
+                logger.warning(f"[Chat] No RAG chain found for session: {session_id}")
+                raise HTTPException(
+                    status_code=404,
+                    detail="No transcript found for this session. Analyze the video or document again, then retry chat."
+                )
+        elif environment == "production":
+            raise HTTPException(
+                status_code=400,
+                detail="session_id is required. Analyze a video or document first, then chat with that session."
+            )
         else:
-            logger.info("[Chat] No session_id provided, looking for most recent RAG chain")
-        
-        # Fallback: Use most recent RAG chain
-        if rag_chain is None:
             from main import get_most_recent_rag_chain, list_all_rag_sessions
-            
+            logger.info("[Chat] No session_id provided, using most recent RAG chain (development only)")
             rag_chain = get_most_recent_rag_chain()
             
             if rag_chain:
-                logger.info("[Chat] ✓ Using most recent RAG chain")
+                logger.info("[Chat]   Using most recent RAG chain")
             else:
-                # List available sessions for debugging
                 available_sessions = list_all_rag_sessions()
                 logger.error(f"[Chat] No RAG chains available. Available sessions: {available_sessions}")
-                
                 raise HTTPException(
                     status_code=400,
-                    detail={
-                        "error": "No transcript available for chat",
-                        "message": "Please analyze a video/document first. No RAG chains found in storage.",
-                        "available_sessions": available_sessions
-                    }
+                    detail="No transcript available for chat. Please analyze a video/document first."
                 )
         
         # Get answer with intelligent routing (with timeout)
@@ -114,15 +122,29 @@ async def chat_with_transcript(request: ChatRequest):
         try:
             # Run with 60 second timeout
             answer_dict = await asyncio.wait_for(
-                asyncio.to_thread(ask_question, rag_chain, validated_question, debug=request.debug),
+                asyncio.to_thread(
+                    rag_chain.ask, validated_question, 5, debug_mode
+                ),
                 timeout=60.0
             )
+            if isinstance(answer_dict, str):
+                answer_text = answer_dict
+                sources = []
+                query_type = "unknown"
+            elif isinstance(answer_dict, dict):
+                answer_text = answer_dict.get("answer", "No answer generated.")
+                sources = answer_dict.get("sources", [])
+                query_type = answer_dict.get("query_type", "unknown")
+            else:
+                answer_text = str(answer_dict) if answer_dict else "No answer generated."
+                sources = []
+                query_type = "unknown"
             
             return {
-                "answer": answer_dict.get("answer", "No answer generated."),
+                "answer": answer_text,
                 "session_id": request.session_id,
-                "sources": answer_dict.get("sources", []),
-                "query_type": answer_dict.get("query_type", "unknown")
+                "sources": sources,
+                "query_type": query_type
             }
             
         except asyncio.TimeoutError:
@@ -141,7 +163,7 @@ async def chat_with_transcript(request: ChatRequest):
         logger.error(f"[Chat] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process question: {str(e)}"
+            detail="Failed to process question. Please try again."
         )
 
 
@@ -164,7 +186,7 @@ async def clear_chat_session(session_id: str):
         deleted = storage.delete_rag_chain(session_id)
         
         if deleted:
-            logger.info(f"[Chat] ✓ Successfully deleted session: {session_id}")
+            logger.info(f"[Chat]   Successfully deleted session: {session_id}")
             return {
                 "message": f"Session {session_id} cleared successfully",
                 "session_id": session_id,
