@@ -98,7 +98,7 @@ class PDFPipeline:
             file_name = pdf_data["file_name"]
             char_count = pdf_data["char_count"]
             
-            logger.info(f"[PDFPipeline] ✓ Extracted {char_count} characters from {page_count} pages")
+            logger.info(f"[PDFPipeline]   Extracted {char_count} characters from {page_count} pages")
             
         except Exception as e:
             logger.error(f"[PDFPipeline] Text extraction failed: {e}", exc_info=True)
@@ -116,7 +116,7 @@ class PDFPipeline:
                 "It may be an image-based PDF requiring OCR."
             )
         
-        logger.info("[PDFPipeline] ✓ Content validated")
+        logger.info("[PDFPipeline]   Content validated")
         
         if progress_callback:
             progress_callback("pdf_processing", "Processing document structure...", 50)
@@ -126,7 +126,7 @@ class PDFPipeline:
         
         cleaned_text = self._clean_text(text)
         
-        logger.info(f"[PDFPipeline] ✓ Text cleaned: {len(cleaned_text)} characters")
+        logger.info(f"[PDFPipeline]   Text cleaned: {len(cleaned_text)} characters")
         
         if progress_callback:
             progress_callback("pdf_processing", "Text processing complete", 60)
@@ -136,7 +136,7 @@ class PDFPipeline:
         
         title = self._generate_title_from_filename(file_name)
         
-        logger.info(f"[PDFPipeline] ✓ Title: {title}")
+        logger.info(f"[PDFPipeline]   Title: {title}")
         
         # STEP 5: Create metadata
         logger.info("[PDFPipeline] STEP 5: Metadata creation")
@@ -151,7 +151,7 @@ class PDFPipeline:
             char_count=len(cleaned_text)
         )
         
-        logger.info("[PDFPipeline] ✓ Metadata created")
+        logger.info("[PDFPipeline]   Metadata created")
         
         if progress_callback:
             progress_callback("pdf_processing", "PDF processing complete", 70)

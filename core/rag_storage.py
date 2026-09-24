@@ -15,10 +15,10 @@ Usage:
 """
 
 import os
-import pickle
+import json
+import time
 import logging
 from typing import Optional, Dict, Any
-from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ class RAGStorage:
         self.default_ttl = default_ttl
         self.redis_client: Optional[redis.Redis] = None
         self._in_memory_store: Dict[str, Any] = {}
+        self._live_chains: Dict[str, Any] = {}
+        self._session_order: list = []
         self._using_redis = False
         
         # Try to connect to Redis
@@ -72,7 +74,7 @@ class RAGStorage:
                 # Test connection
                 self.redis_client.ping()
                 self._using_redis = True
-                logger.info(f"[RAGStorage] ✓ Connected to Redis: {redis_url}")
+                logger.info(f"[RAGStorage]   Connected to Redis: {redis_url}")
             except Exception as e:
                 logger.warning(f"[RAGStorage] Redis connection failed: {e}")
                 logger.warning("[RAGStorage] Falling back to in-memory storage")
@@ -101,17 +103,24 @@ class RAGStorage:
         key = self._make_key(session_id)
         
         try:
-            # Serialize RAG chain
-            serialized = pickle.dumps(rag_chain)
+            # Keep the live object. Chroma / HuggingFace embeddings are not reliably
+            # pickleable, so we persist only lightweight session metadata.
+            self._live_chains[session_id] = rag_chain
+            if session_id in self._session_order:
+                self._session_order.remove(session_id)
+            self._session_order.append(session_id)
+            
+            metadata = json.dumps({
+                "source_id": session_id,
+                "ts": time.time()
+            }).encode("utf-8")
             
             if self._using_redis and self.redis_client:
-                # Store in Redis with TTL
-                self.redis_client.setex(key, ttl, serialized)
-                logger.info(f"[RAGStorage] ✓ Stored in Redis: {session_id} (TTL: {ttl}s)")
+                self.redis_client.setex(key, ttl, metadata)
+                logger.info(f"[RAGStorage]   Stored session metadata in Redis: {session_id} (TTL: {ttl}s)")
             else:
-                # Store in memory (no TTL in fallback)
-                self._in_memory_store[key] = serialized
-                logger.info(f"[RAGStorage] ✓ Stored in memory: {session_id}")
+                self._in_memory_store[key] = metadata
+                logger.info(f"[RAGStorage]   Stored live RAG chain: {session_id}")
             
             return True
             
@@ -129,26 +138,13 @@ class RAGStorage:
         Returns:
             RAG chain instance or None if not found
         """
-        key = self._make_key(session_id)
-        
         try:
-            serialized = None
+            live = self._live_chains.get(session_id)
+            if live is not None:
+                logger.info(f"[RAGStorage]   Retrieved live RAG chain: {session_id}")
+                return live
             
-            if self._using_redis and self.redis_client:
-                # Retrieve from Redis
-                serialized = self.redis_client.get(key)
-                if serialized:
-                    logger.info(f"[RAGStorage] ✓ Retrieved from Redis: {session_id}")
-            else:
-                # Retrieve from memory
-                serialized = self._in_memory_store.get(key)
-                if serialized:
-                    logger.info(f"[RAGStorage] ✓ Retrieved from memory: {session_id}")
-            
-            if serialized:
-                return pickle.loads(serialized)
-            
-            logger.debug(f"[RAGStorage] Not found: {session_id}")
+            logger.debug(f"[RAGStorage] No live chain for: {session_id}")
             return None
             
         except Exception as e:
@@ -168,6 +164,10 @@ class RAGStorage:
         key = self._make_key(session_id)
         
         try:
+            self._live_chains.pop(session_id, None)
+            if session_id in self._session_order:
+                self._session_order.remove(session_id)
+            
             if self._using_redis and self.redis_client:
                 deleted = self.redis_client.delete(key)
                 logger.info(f"[RAGStorage] Deleted from Redis: {session_id}")
@@ -191,23 +191,26 @@ class RAGStorage:
             List of session IDs
         """
         try:
+            session_ids = list(self._session_order)
+            
             if self._using_redis and self.redis_client:
-                # Get all keys matching pattern
                 pattern = self._make_key("*")
                 keys = self.redis_client.keys(pattern)
-                session_ids = [key.decode('utf-8').replace('rag_chain:', '') for key in keys]
-                logger.debug(f"[RAGStorage] Found {len(session_ids)} sessions in Redis")
+                for key in keys:
+                    sid = key.decode('utf-8').replace('rag_chain:', '') if isinstance(key, bytes) else str(key).replace('rag_chain:', '')
+                    if sid and sid not in session_ids:
+                        session_ids.append(sid)
+                logger.debug(f"[RAGStorage] Found {len(session_ids)} sessions")
                 return session_ids
-            else:
-                # Get from memory
-                prefix = "rag_chain:"
-                session_ids = [
-                    key.replace(prefix, '')
-                    for key in self._in_memory_store.keys()
-                    if key.startswith(prefix)
-                ]
-                logger.debug(f"[RAGStorage] Found {len(session_ids)} sessions in memory")
-                return session_ids
+            
+            prefix = "rag_chain:"
+            for key in self._in_memory_store.keys():
+                if key.startswith(prefix):
+                    sid = key.replace(prefix, '')
+                    if sid not in session_ids:
+                        session_ids.append(sid)
+            logger.debug(f"[RAGStorage] Found {len(session_ids)} sessions in memory")
+            return session_ids
                 
         except Exception as e:
             logger.error(f"[RAGStorage] Failed to list sessions: {e}")
@@ -223,9 +226,11 @@ class RAGStorage:
         Returns:
             Session ID or None
         """
+        if self._session_order:
+            return self._session_order[-1]
+        
         sessions = self.list_sessions()
         if sessions:
-            # Return last session (most recent in insertion order)
             return sessions[-1]
         return None
     
@@ -242,17 +247,23 @@ class RAGStorage:
             if self._using_redis and self.redis_client:
                 pattern = self._make_key("*")
                 keys = self.redis_client.keys(pattern)
+                deleted = 0
                 if keys:
                     deleted = self.redis_client.delete(*keys)
-                    logger.info(f"[RAGStorage] Cleared {deleted} sessions from Redis")
-                    return deleted
-                return 0
+                live_count = len(self._live_chains)
+                self._live_chains.clear()
+                self._session_order.clear()
+                logger.info(f"[RAGStorage] Cleared {deleted} Redis keys and {live_count} live chains")
+                return max(deleted, live_count)
             else:
                 count = len([k for k in self._in_memory_store.keys() if k.startswith('rag_chain:')])
                 self._in_memory_store = {
                     k: v for k, v in self._in_memory_store.items()
                     if not k.startswith('rag_chain:')
                 }
+                count = max(count, len(self._live_chains))
+                self._live_chains.clear()
+                self._session_order.clear()
                 logger.info(f"[RAGStorage] Cleared {count} sessions from memory")
                 return count
                 
