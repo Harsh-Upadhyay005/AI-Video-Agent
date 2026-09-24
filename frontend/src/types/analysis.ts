@@ -3,7 +3,7 @@
  */
 
 export interface AnalysisData {
-  job_id: string;
+  job_id?: string;
   title: string;
   type: 'video' | 'audio' | 'pdf';
   summary?: string;
