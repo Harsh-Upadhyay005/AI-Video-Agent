@@ -2,7 +2,7 @@
 Video/Audio analysis endpoints.
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional, Dict, Any
@@ -14,6 +14,7 @@ import uuid
 from core.validators import InputValidator
 from core.logger import get_logger
 from core.exceptions import ValidationError
+from core.auth_middleware import get_current_user, get_current_user_optional, AuthUser
 from main import run_pipeline, get_rag_chain_for_source
 from utils.file_manager import get_file_manager
 
@@ -63,7 +64,11 @@ class AnalysisResult(BaseModel):
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
-async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTasks):
+async def analyze_video(
+    request: AnalysisRequest,
+    background_tasks: BackgroundTasks,
+    current_user: AuthUser = Depends(get_current_user)
+):
     """
     Analyze a video or audio file asynchronously with real-time progress.
     
@@ -77,7 +82,7 @@ async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTa
         validated_source, source_type = InputValidator.validate_source_input(request.source)
         language = InputValidator.validate_language(request.language.value)
         
-        logger.info(f"Starting analysis: source_type={source_type}, language={language}")
+        logger.info(f"Starting analysis for user {current_user.id}: source_type={source_type}, language={language}")
         
         # Generate job ID
         job_id = str(uuid.uuid4())
@@ -111,6 +116,9 @@ async def analyze_video(request: AnalysisRequest, background_tasks: BackgroundTa
 
 async def process_analysis_with_progress(job_id: str, source: str, language: str):
     """
+    NOTE: This runs as a BackgroundTask. Heavy pipeline work is offloaded
+    to a thread via asyncio.to_thread to avoid blocking the event loop.
+
     Process the analysis with real-time progress updates and enhanced error handling.
     
     Args:
@@ -136,7 +144,10 @@ async def process_analysis_with_progress(job_id: str, source: str, language: str
         from main import PipelineError
         
         # Run the pipeline with progress callback
-        result = run_pipeline(source, language, progress_callback=update_progress, source_key=job_id)
+        result = await asyncio.to_thread(
+            run_pipeline, source, language,
+            progress_callback=update_progress, source_key=job_id
+        )
         
         # Check for stage failures
         stage_statuses = result.get("stage_statuses", {})
@@ -149,6 +160,9 @@ async def process_analysis_with_progress(job_id: str, source: str, language: str
                 failed_stages.append(stage_name)
         
         # Build JSON-safe result
+        source_type = result.get("source_type", "video") or "video"
+        ui_type = "pdf" if source_type == "pdf" else ("audio" if source_type == "audio" else "video")
+        
         json_safe_result = {
             "title": result.get("title", ""),
             "transcript": result.get("transcript", ""),
@@ -157,6 +171,8 @@ async def process_analysis_with_progress(job_id: str, source: str, language: str
             "key_decisions": result.get("key_decisions", ""),
             "open_questions": result.get("open_questions", ""),
             "job_id": job_id,
+            "type": ui_type,
+            "source_type": source_type,
             "stage_statuses": stage_statuses  # Include stage status information
         }
         
@@ -300,22 +316,30 @@ async def get_analysis_status(job_id: str):
     
     Returns the current status and result (if completed).
     """
-    # In production: Query database/cache for job status
-    # For now, return a placeholder
+    if job_id not in progress_store:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     
+    progress_data = progress_store[job_id]
     return {
         "job_id": job_id,
-        "status": "completed",  # or "processing", "failed"
-        "message": "This is a placeholder. Implement persistent storage for production."
+        "status": progress_data.get("status", "unknown"),
+        "stage": progress_data.get("stage", "unknown"),
+        "progress": progress_data.get("progress", 0),
+        "message": progress_data.get("message", ""),
+        "result": progress_data.get("result") if progress_data.get("status") == "completed" else None,
+        "error": progress_data.get("error") if progress_data.get("status") == "failed" else None
     }
 
 
 @router.post("/analyze/sync", response_model=AnalysisResult)
-async def analyze_video_sync(request: AnalysisRequest):
+async def analyze_video_sync(
+    request: AnalysisRequest,
+    current_user: AuthUser = Depends(get_current_user)
+):
     """
     Synchronously analyze a video or audio file.
     
-    ⚠️ WARNING: This endpoint blocks until analysis is complete.
+      WARNING: This endpoint blocks until analysis is complete.
     Only use for turbo files or testing. Use /analyze for production.
     
     - **source**: YouTube URL or local file path
@@ -354,7 +378,8 @@ async def analyze_video_sync(request: AnalysisRequest):
 async def upload_and_analyze(
     file: UploadFile = File(..., description="Audio or video file (MP3, MP4, etc.)"),
     language: str = Form(default="english", description="Language for transcription"),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    current_user: AuthUser = Depends(get_current_user)
 ):
     """
     Upload an audio/video file and analyze it asynchronously.
@@ -362,8 +387,9 @@ async def upload_and_analyze(
     Supported formats:
     - Audio: MP3, WAV, M4A, FLAC, OGG, AAC
     - Video: MP4, AVI, MOV, MKV, WebM, FLV
+    - Documents: PDF
     
-    - **file**: Audio or video file to analyze
+    - **file**: Audio, video, or PDF file to analyze
     - **language**: Language for transcription (english or hinglish)
     
     Returns a job ID. Use /progress/{job_id} to get real-time progress updates.
@@ -374,7 +400,7 @@ async def upload_and_analyze(
         # Validate language
         validated_language = InputValidator.validate_language(language)
         
-        logger.info(f"Processing file upload: {file.filename}, language={validated_language}")
+        logger.info(f"Processing file upload for user {current_user.id}: {file.filename}, language={validated_language}")
         
         # Get file manager
         file_manager = get_file_manager()
@@ -456,11 +482,16 @@ async def process_uploaded_file_with_progress(
         
         update_progress("processing", "Processing uploaded file...", 10)
         
-        # Run the pipeline with the uploaded file path
-        # The audio_processor will handle conversion and chunking
-        result = run_pipeline(file_path, language, progress_callback=update_progress, source_key=job_id)
+        # Run the pipeline in a thread to avoid blocking the event loop
+        result = await asyncio.to_thread(
+            run_pipeline, file_path, language,
+            progress_callback=update_progress, source_key=job_id
+        )
         
         # Ensure result contains only JSON-serializable data
+        source_type = result.get("source_type", "video") or "video"
+        ui_type = "pdf" if source_type == "pdf" else ("audio" if source_type == "audio" else "video")
+        
         json_safe_result = {
             "title": result.get("title", ""),
             "transcript": result.get("transcript", ""),
@@ -468,7 +499,9 @@ async def process_uploaded_file_with_progress(
             "action_items": result.get("action_items", ""),
             "key_decisions": result.get("key_decisions", ""),
             "open_questions": result.get("open_questions", ""),
-            "job_id": job_id
+            "job_id": job_id,
+            "type": ui_type,
+            "source_type": source_type,
         }
         
         # Store result

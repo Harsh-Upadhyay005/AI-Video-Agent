@@ -20,7 +20,8 @@ class InputValidator:
     # Supported audio/video file extensions
     SUPPORTED_EXTENSIONS = {
         '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac',
-        '.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv'
+        '.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv',
+        '.pdf'
     }
     
     # Supported YouTube domains

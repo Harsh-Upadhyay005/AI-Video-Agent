@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, List, Tuple
+import os
 import time
 import uvicorn
 
@@ -19,9 +20,28 @@ from core.security import perform_security_check
 from core.logger import get_logger
 from core.exceptions import AIVideoAgentException
 from core.resource_manager import cleanup_on_shutdown
-from api.routes import analysis, health, chat
+from api.routes import analysis, health, chat, account
 
 logger = get_logger(__name__)
+
+
+def _cors_settings() -> Tuple[List[str], bool]:
+    """Return allowed origins and whether credentials are allowed."""
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    raw = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000",
+    )
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    if environment == "production":
+        origins = [origin for origin in origins if origin != "*"]
+        if not origins:
+            origins = ["http://localhost:5173"]
+            logger.warning(
+                "CORS_ORIGINS is not set in production; defaulting to http://localhost:5173"
+            )
+    allow_credentials = "*" not in origins
+    return origins, allow_credentials
 
 
 @asynccontextmanager
@@ -79,15 +99,17 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during shutdown: {str(e)}")
 
 
+_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
 # Create FastAPI application
 app = FastAPI(
     title="AI Video Agent API",
     description="Production-ready API for video/audio transcription, summarization, and RAG-based chat",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    docs_url=None if _IS_PRODUCTION else "/docs",
+    redoc_url=None if _IS_PRODUCTION else "/redoc",
+    openapi_url=None if _IS_PRODUCTION else "/openapi.json",
 )
 
 
@@ -95,12 +117,12 @@ app = FastAPI(
 # Middleware Configuration
 # =============================================================================
 
-# CORS Middleware - Configure based on your needs
+_CORS_ORIGINS, _CORS_CREDENTIALS = _cors_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=_CORS_CREDENTIALS,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -196,6 +218,7 @@ app.include_router(health.router, prefix="/api", tags=["Health"])  # /api/health
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])  # /api/v1/health
 app.include_router(analysis.router, prefix="/api/v1", tags=["Analysis"])
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
+app.include_router(account.router, prefix="/api/v1", tags=["Account"])
 
 
 # =============================================================================
