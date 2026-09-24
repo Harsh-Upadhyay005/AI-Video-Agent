@@ -88,14 +88,28 @@ def build_rag_chain(
     
     vector_store = build_vector_store(text, metadata=vector_metadata)
     
-    # Load persisted documents for BM25
+    # Load persisted documents for BM25 (same chunks written during indexing)
     docs = _load_documents(video_id)
+    if not docs:
+        try:
+            stored = vector_store.get()
+            texts = stored.get("documents") or []
+            metas = stored.get("metadatas") or [{}] * len(texts)
+            if texts and Document is not None:
+                docs = [
+                    Document(page_content=text, metadata=meta or {})
+                    for text, meta in zip(texts, metas)
+                ]
+        except Exception as e:
+            logger.warning(f"[RAG] Could not recover documents from Chroma: {e}")
+            docs = None
+    
     if docs:
-        logger.info(f"[RAG] ✓ Loaded {len(docs)} documents for hybrid search")
+        logger.info(f"[RAG]   Loaded {len(docs)} documents for hybrid search")
     else:
         logger.warning("[RAG] No documents loaded - hybrid search will fallback to dense-only")
     
-    logger.info("[RAG] ✓ Vector store created successfully")
+    logger.info("[RAG]   Vector store created successfully")
     
     # Create enhanced RAG chain with documents
     enhanced_chain = EnhancedRAGChain(
@@ -346,7 +360,7 @@ def get_similar_chunks(
     
     try:
         retriever = rag_chain.vector_store.as_retriever(search_kwargs={"k": top_k})
-        docs = retriever.get_relevant_documents(query)
+        docs = retriever.invoke(query)
         
         chunks = []
         for doc in docs:
@@ -365,28 +379,47 @@ def get_similar_chunks(
 
 def load_rag_chain(video_id: str = None):
     """
-    Load RAG chain from persistent vector store.
+    Reconstruct a RAG chain from the persisted Chroma collection and BM25 docs.
     
-    Args:
-        video_id: Optional video/source ID
-        
-    Returns:
-        EnhancedRAGChain or None
+    Used when the in-process live chain is gone (server restart) or when
+    pickle-based storage previously failed.
     """
     try:
-        vector_store = load_vector_store()
+        if not video_id:
+            logger.warning("[RAG] Cannot load chain without a source/session ID")
+            return None
+        
+        vector_store = load_vector_store(video_id)
         
         if vector_store is None:
             return None
         
-        # Create enhanced chain
-        enhanced_chain = EnhancedRAGChain(
-            vector_store=vector_store,
-            source_id=video_id,
-            metadata=None
+        docs = _load_documents(video_id)
+        if not docs:
+            try:
+                stored = vector_store.get()
+                texts = stored.get("documents") or []
+                metas = stored.get("metadatas") or [{}] * len(texts)
+                if texts and Document is not None:
+                    docs = [
+                        Document(page_content=text, metadata=meta or {})
+                        for text, meta in zip(texts, metas)
+                    ]
+            except Exception as e:
+                logger.warning(f"[RAG] Could not recover documents from Chroma: {e}")
+                docs = None
+        
+        logger.info(
+            f"[RAG] Reconstructed chain for {video_id} "
+            f"(hybrid docs={'yes' if docs else 'no'})"
         )
         
-        return enhanced_chain
+        return EnhancedRAGChain(
+            vector_store=vector_store,
+            source_id=video_id,
+            metadata=None,
+            docs=docs
+        )
         
     except Exception as e:
         logger.error(f"[RAG] Error loading chain: {e}")
