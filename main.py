@@ -100,7 +100,7 @@ def run_pipeline(
     
     try:
         source_type = SourceType.from_source(source)
-        logger.info(f"[Pipeline] ✓ Detected source type: {source_type.value}")
+        logger.info(f"[Pipeline]   Detected source type: {source_type.value}")
         
         stage_results['source_detection'] = StageResult(
             stage="source_detection",
@@ -136,7 +136,7 @@ def run_pipeline(
                 data=ingestion_result.to_dict()
             )
             
-            logger.info("[Pipeline] ✓ PDF ingestion complete (no LLM used)")
+            logger.info("[Pipeline]   PDF ingestion complete (no LLM used)")
             
         elif source_type.requires_stt():
             # AUDIO/VIDEO PIPELINE: STT only
@@ -158,7 +158,7 @@ def run_pipeline(
                 data=ingestion_result.to_dict()
             )
             
-            logger.info("[Pipeline] ✓ Audio/video ingestion complete (STT used, no LLM analysis)")
+            logger.info("[Pipeline]   Audio/video ingestion complete (STT used, no LLM analysis)")
             
         else:
             raise ValueError(f"Unsupported source type: {source_type}")
@@ -178,7 +178,7 @@ def run_pipeline(
             "EMPTY_CONTENT"
         )
     
-    logger.info(f"[Pipeline] ✓ Content validated: {len(text)} characters")
+    logger.info(f"[Pipeline]   Content validated: {len(text)} characters")
     
     stage_results['validation'] = StageResult(
         stage="validation",
@@ -203,7 +203,7 @@ def run_pipeline(
             video_id=vector_store_key
         )
         
-        logger.info("[Pipeline] ✓ RAG vector store created")
+        logger.info("[Pipeline]   RAG vector store created")
         logger.info("[Pipeline] Content is now indexed and ready for queries")
         logger.info("[Pipeline] LLM will be initialized ONLY when user asks a question")
         
@@ -269,7 +269,7 @@ def run_pipeline(
                 top_k=20
             )
             
-            logger.info("[Pipeline] ✓ Analysis complete (RAG retrieval was used)")
+            logger.info("[Pipeline]   Analysis complete (RAG retrieval was used)")
             
             stage_results['analysis'] = StageResult(
                 stage="analysis",
@@ -330,7 +330,7 @@ def run_pipeline(
     logger.info("[Pipeline] STAGE SUMMARY:")
     for stage_name, result in stage_results.items():
         status_symbol = {
-            StageStatus.SUCCESS: "✓",
+            StageStatus.SUCCESS: " ",
             StageStatus.FAILED: "✗",
             StageStatus.SKIPPED: "○",
             StageStatus.PARTIAL: "◐"
@@ -381,7 +381,7 @@ def _store_rag_chain_internally(source_key: str, rag_chain):
     success = storage.store_rag_chain(source_key, rag_chain)
     
     if success:
-        logger.info(f"[Pipeline] ✓ Stored RAG chain: {source_key}")
+        logger.info(f"[Pipeline]   Stored RAG chain: {source_key}")
     else:
         logger.error(f"[Pipeline] ✗ Failed to store RAG chain: {source_key}")
 
@@ -390,21 +390,29 @@ def get_rag_chain_for_source(source_key: str):
     """
     Retrieve stored RAG chain for a given source.
     
-    Args:
-        source_key: Unique identifier for the source
-        
-    Returns:
-        The stored RAG chain or None if not found
+    Looks up the live in-process chain first, then reconstructs from the
+    persisted Chroma collection + BM25 documents.
     """
+    if not source_key:
+        return None
+    
     storage = get_rag_storage()
     rag_chain = storage.get_rag_chain(source_key)
     
     if rag_chain:
-        logger.info(f"[Pipeline] ✓ Retrieved RAG chain: {source_key}")
-    else:
-        logger.debug(f"[Pipeline] RAG chain not found: {source_key}")
+        logger.info(f"[Pipeline]   Retrieved live RAG chain: {source_key}")
+        return rag_chain
     
-    return rag_chain
+    from core.rag_engine import load_rag_chain
+    rag_chain = load_rag_chain(source_key)
+    
+    if rag_chain:
+        logger.info(f"[Pipeline]   Reconstructed RAG chain from disk: {source_key}")
+        storage.store_rag_chain(source_key, rag_chain)
+        return rag_chain
+    
+    logger.debug(f"[Pipeline] RAG chain not found: {source_key}")
+    return None
 
 
 def get_most_recent_rag_chain():
@@ -419,7 +427,7 @@ def get_most_recent_rag_chain():
     
     if session_id:
         logger.info(f"[Pipeline] Most recent session: {session_id}")
-        return storage.get_rag_chain(session_id)
+        return get_rag_chain_for_source(session_id)
     
     return None
 
@@ -468,7 +476,7 @@ if __name__ == "__main__":
         result = run_pipeline(source, language, mode=mode)
         
         print("\n" + "=" * 60)
-        print(f"✓ INGESTION COMPLETE")
+        print(f"  INGESTION COMPLETE")
         print("=" * 60)
         print(f"Title: {result['title']}")
         print(f"Source Type: {result['source_type']}")

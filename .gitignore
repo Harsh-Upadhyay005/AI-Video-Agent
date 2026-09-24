@@ -19,6 +19,7 @@ lib64/
 parts/
 sdist/
 var/
+node_modules
 wheels/
 share/python-wheels/
 *.egg-info/
@@ -216,3 +217,40 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ============================================================================
+# AI Video Agent Specific - Security & Application Data
+# ============================================================================
+
+# Secrets and credentials - NEVER COMMIT!
+*.key
+*.pem
+*.p12
+secrets/
+credentials/
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+
+# Application data directories
+downloads/
+logs/
+vector_db/
+vector_db_docs/
+metadata_store/
+*.db
+*.sqlite
+debug-*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,141 @@
+version: '3.8'
+
+# =============================================================================
+# AI Video Agent - Docker Compose Configuration
+# =============================================================================
+# Orchestrates the AI Video Agent application with all its dependencies
+# =============================================================================
+
+services:
+  # Main application service
+  ai-video-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-video-agent
+    restart: unless-stopped
+    
+    ports:
+      - "8000:8000"
+    
+    environment:
+      # Application settings
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # Audio processing
+      - DOWNLOAD_DIR=/app/downloads
+      - CHUNK_MINUTES=10
+      
+      # Whisper settings
+      - WHISPER_MODEL=small
+      - WHISPER_DEVICE=cpu
+      
+      # API Keys (loaded from .env file)
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - SARVAM_API_KEY=${SARVAM_API_KEY}
+      
+      # Database settings
+      - VECTOR_DB_DIR=/app/vector_db
+    
+    volumes:
+      # Persist data directories
+      - ./downloads:/app/downloads
+      - ./logs:/app/logs
+      - ./vector_db:/app/vector_db
+      
+      # Optional: Mount custom config
+      # - ./config:/app/config:ro
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Load environment variables from .env file
+    env_file:
+      - .env
+    
+    # Networks
+    networks:
+      - ai-video-network
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Redis for caching (uncomment if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ai-video-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - ai-video-network
+  #   command: redis-server --appendonly yes
+
+  # Optional: PostgreSQL for persistent storage (uncomment if needed)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: ai-video-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_DB=ai_video_agent
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - ai-video-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # Optional: Nginx reverse proxy (uncomment for production)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: ai-video-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - ai-video-agent
+  #   networks:
+  #     - ai-video-network
+
+networks:
+  ai-video-network:
+    driver: bridge
+
+volumes:
+  # Uncomment if using optional services
+  # redis-data:
+  # postgres-data:
