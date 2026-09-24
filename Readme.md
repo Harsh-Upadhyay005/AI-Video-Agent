@@ -72,7 +72,7 @@ All documentation is in the **`docs/`** folder:
 
 ### Getting Started
 - **[START_HERE.md](docs/START_HERE.md)** - Complete setup guide
-- **[QUICKSTART.txt](QUICKSTART.txt)** - Quick start commands
+- **[QUICKSTART.md](QUICKSTART.md)** - Quick start commands
 
 ### Features
 - **[ENHANCED_RAG_GUIDE.md](docs/ENHANCED_RAG_GUIDE.md)** - Advanced RAG with query routing
