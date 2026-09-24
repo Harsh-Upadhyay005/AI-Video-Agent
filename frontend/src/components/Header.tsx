@@ -9,7 +9,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onNavigateToStudio,
   onNavigateToHome,
-  activeView
+  activeView,
 }) => {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -101,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Links & CTA */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
             <nav className="hidden md:flex items-center gap-5 text-xs font-bold uppercase tracking-wider text-[#1A1A1A]/70">
               <a href="#playground" className="hover:text-[#1A1A1A] transition-colors">
                 Dictation Lab
@@ -111,7 +111,6 @@ export const Header: React.FC<HeaderProps> = ({
               </a>
             </nav>
 
-            {/* CTA Button */}
             <button
               onClick={onNavigateToStudio}
               className="flex items-center gap-2 rounded-full bg-[#E5D7FA] hover:bg-[#D9CCF5] border border-black/10 px-4 py-2 text-xs font-bold text-[#1A1A1A] transition-all hover:scale-105 active:scale-95 shadow-xs"
