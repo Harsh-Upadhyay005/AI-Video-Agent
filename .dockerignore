@@ -1,0 +1,106 @@
+# =============================================================================
+# Docker Ignore File - Excludes files from Docker build context
+# =============================================================================
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+*.txt
+!requirements.txt
+
+# Tests
+tests/
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Application data (will be mounted as volumes)
+downloads/
+logs/
+vector_db/
+vector_db_docs/
+metadata_store/
+*.db
+*.sqlite
+frontend/node_modules/
+frontend/dist/
+debug-*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Media files (examples)
+*.mp4
+*.mp3
+*.wav
+*.webm
+*.avi
+
+# Large models (download at runtime if needed)
+models/
+*.pt
+*.pth
+*.ckpt
+
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+secrets/
+credentials/
+.env.local
+.env.*.local

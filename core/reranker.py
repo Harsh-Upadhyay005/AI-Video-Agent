@@ -74,7 +74,7 @@ def get_cross_encoder_reranker(
             top_n=top_n
         )
         
-        logger.info(f"[Reranker] ✓ Reranker initialized (top_n={top_n})")
+        logger.info(f"[Reranker]   Reranker initialized (top_n={top_n})")
         return reranker
         
     except Exception as e:
@@ -126,7 +126,7 @@ def get_reranked_retriever(
             base_retriever=base_retriever
         )
         
-        logger.info(f"[Reranker] ✓ Created reranked retriever (top_n={top_n})")
+        logger.info(f"[Reranker]   Created reranked retriever (top_n={top_n})")
         return compression_retriever
         
     except Exception as e:
@@ -161,6 +161,6 @@ def get_cached_reranker(
             top_n=top_n
         )
         if _reranker_cache:
-            logger.info("[Reranker] ✓ Cached reranker initialized")
+            logger.info("[Reranker]   Cached reranker initialized")
     
     return _reranker_cache
