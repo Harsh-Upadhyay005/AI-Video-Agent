@@ -98,7 +98,7 @@ class AudioPipeline:
             
             try:
                 audio_chunks = process_input(source)
-                logger.info(f"[AudioPipeline] ✓ Downloaded: {len(audio_chunks)} chunks")
+                logger.info(f"[AudioPipeline]   Downloaded: {len(audio_chunks)} chunks")
                 
             except Exception as e:
                 logger.error(f"[AudioPipeline] YouTube download failed: {e}")
@@ -112,7 +112,7 @@ class AudioPipeline:
             
             try:
                 audio_chunks = process_input(source)
-                logger.info(f"[AudioPipeline] ✓ Processed: {len(audio_chunks)} chunks")
+                logger.info(f"[AudioPipeline]   Processed: {len(audio_chunks)} chunks")
                 
             except Exception as e:
                 logger.error(f"[AudioPipeline] Audio processing failed: {e}")
@@ -147,7 +147,7 @@ class AudioPipeline:
                 progress_callback=stt_progress
             )
             
-            logger.info(f"[AudioPipeline] ✓ Transcribed: {len(transcript)} characters")
+            logger.info(f"[AudioPipeline]   Transcribed: {len(transcript)} characters")
             
         except Exception as e:
             logger.error(f"[AudioPipeline] Transcription failed: {e}", exc_info=True)
@@ -165,14 +165,14 @@ class AudioPipeline:
                 "Audio may not contain speech or may be silent."
             )
         
-        logger.info("[AudioPipeline] ✓ Transcript validated")
+        logger.info("[AudioPipeline]   Transcript validated")
         
         # STEP 4: Clean transcript (local processing)
         logger.info("[AudioPipeline] STEP 4: Transcript cleaning")
         
         cleaned_transcript = self._clean_transcript(transcript)
         
-        logger.info(f"[AudioPipeline] ✓ Transcript cleaned: {len(cleaned_transcript)} characters")
+        logger.info(f"[AudioPipeline]   Transcript cleaned: {len(cleaned_transcript)} characters")
         
         if progress_callback:
             progress_callback("audio_processing", "Transcript processing complete", 65)
@@ -182,7 +182,7 @@ class AudioPipeline:
         
         title = self._generate_title_from_source(source, source_type)
         
-        logger.info(f"[AudioPipeline] ✓ Title: {title}")
+        logger.info(f"[AudioPipeline]   Title: {title}")
         
         # STEP 6: Create metadata
         logger.info("[AudioPipeline] STEP 6: Metadata creation")
@@ -196,7 +196,7 @@ class AudioPipeline:
             char_count=len(cleaned_transcript)
         )
         
-        logger.info("[AudioPipeline] ✓ Metadata created")
+        logger.info("[AudioPipeline]   Metadata created")
         
         if progress_callback:
             progress_callback("audio_processing", "Audio processing complete", 70)
