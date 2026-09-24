@@ -6,12 +6,18 @@ Provides validation, temporary storage, cleanup, and Supabase integration.
 import os
 import uuid
 import shutil
-import magic
 from pathlib import Path
 from typing import Optional, Tuple
 from fastapi import UploadFile
 from core.logger import get_logger
 from core.exceptions import ValidationError
+
+# Try to import python-magic for MIME type detection
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
 
 # Supabase integration (optional)
 try:
@@ -111,6 +117,7 @@ class FileManager:
     def _validate_mime_type(self, file_path: Path, expected_ext: str) -> bool:
         """
         Validate MIME type matches file extension.
+        Binary-safe validation that handles Unicode filenames properly.
         
         Args:
             file_path: Path to uploaded file
@@ -123,9 +130,40 @@ class FileManager:
             ValidationError: If MIME type doesn't match
         """
         try:
-            # Use python-magic to detect actual file type
-            mime = magic.Magic(mime=True)
-            detected_mime = mime.from_file(str(file_path))
+            # For PDFs, use binary signature validation (more reliable)
+            if expected_ext == '.pdf':
+                try:
+                    with open(file_path, 'rb') as f:
+                        # Read first 5 bytes to check PDF signature
+                        header = f.read(5)
+                        if header != b'%PDF-':
+                            raise ValidationError(
+                                f"Invalid PDF file. File does not contain valid PDF signature."
+                            )
+                    logger.info(f"PDF signature validation passed for {file_path.name}")
+                    return True
+                except IOError as e:
+                    raise ValidationError(f"Could not read file for validation: {str(e)}")
+            
+            # Use python-magic for other file types if available
+            if not MAGIC_AVAILABLE:
+                logger.warning("python-magic not installed - skipping MIME type validation")
+                return True
+            
+            # Use from_buffer instead of from_file to handle Unicode filenames better
+            try:
+                mime = magic.Magic(mime=True)
+                # Read file content in binary mode to avoid encoding issues
+                with open(file_path, 'rb') as f:
+                    # Read first 2048 bytes for MIME detection (sufficient for headers)
+                    file_header = f.read(2048)
+                detected_mime = mime.from_buffer(file_header)
+            except Exception as magic_error:
+                # Fallback to from_file if from_buffer fails
+                logger.warning(f"magic.from_buffer failed, trying from_file: {magic_error}")
+                mime = magic.Magic(mime=True)
+                # Ensure path is passed as string with proper encoding
+                detected_mime = mime.from_file(str(file_path))
             
             # Check if detected MIME type is in our allowed list
             if detected_mime not in self.ALLOWED_MIME_TYPES:
@@ -149,6 +187,9 @@ class FileManager:
             # python-magic not installed - skip MIME validation but log warning
             logger.warning("python-magic not installed - skipping MIME type validation")
             return True
+        except ValidationError:
+            # Re-raise validation errors as-is
+            raise
         except Exception as e:
             logger.error(f"MIME type validation failed: {e}")
             raise ValidationError(f"Could not validate file content: {str(e)}")
@@ -189,25 +230,36 @@ class FileManager:
     
     def _sanitize_filename(self, filename: str) -> str:
         """
-        Sanitize filename for safe storage.
+        Sanitize filename for safe storage while preserving Unicode characters.
+        Keeps Hindi/Unicode characters intact, only removes filesystem-unsafe characters.
         
         Args:
-            filename: Original filename
+            filename: Original filename (Unicode string)
             
         Returns:
-            Sanitized filename
+            Sanitized filename (Unicode string)
         """
         # Remove path components
         filename = Path(filename).name
         
-        # Remove dangerous characters
+        # Remove only dangerous filesystem characters, preserve Unicode/Hindi characters
+        # Only remove: < > : " / \ | ? * and control characters (0x00-0x1f)
         import re
+        # This regex only removes ASCII control characters and filesystem-unsafe chars
+        # It preserves all Unicode characters including Hindi, Chinese, Arabic, etc.
         filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename)
         
-        # Limit length
-        if len(filename) > 200:
+        # Limit byte length to avoid filesystem limits (most systems support 255 bytes)
+        # Use UTF-8 encoding to check byte length
+        max_bytes = 200
+        if len(filename.encode('utf-8')) > max_bytes:
             name, ext = os.path.splitext(filename)
-            filename = name[:200-len(ext)] + ext
+            ext_bytes = len(ext.encode('utf-8'))
+            # Truncate name to fit within byte limit
+            name_bytes = max_bytes - ext_bytes
+            # Decode back to string, ignoring incomplete characters at the end
+            name_truncated = name.encode('utf-8')[:name_bytes].decode('utf-8', errors='ignore')
+            filename = name_truncated + ext
         
         return filename
     

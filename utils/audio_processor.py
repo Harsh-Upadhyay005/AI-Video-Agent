@@ -50,7 +50,7 @@ def _find_browser_executable(browser_name: str) -> Optional[str]:
     # Check each path for this browser
     for path in browser_paths.get(browser_name.lower(), []):
         if path.exists():
-            logger.info(f"✓ Found {browser_name} at: {path}")
+            logger.info(f"  Found {browser_name} at: {path}")
             return str(path)
     
     return None
@@ -83,7 +83,7 @@ def _build_yt_dlp_options(output_path: str, node_path: str, client: str = "andro
             available_browsers.append(display_name)
             if cookiesfrombrowser is None:  # Use first found
                 cookiesfrombrowser = (browser_name, display_name)
-                logger.info(f"✓ Will extract cookies from {display_name}")
+                logger.info(f"  Will extract cookies from {display_name}")
     
     if not cookiesfrombrowser:
         logger.warning("⚠ No browser found for cookie extraction!")
@@ -147,7 +147,7 @@ def _build_yt_dlp_options(output_path: str, node_path: str, client: str = "andro
     if cookiesfrombrowser:
         browser_name, display_name = cookiesfrombrowser
         options["cookiesfrombrowser"] = (browser_name,)
-        logger.info(f"✓ Using cookies from {display_name}")
+        logger.info(f"  Using cookies from {display_name}")
         logger.warning(f"  IMPORTANT: {display_name} MUST be closed for cookie extraction!")
     else:
         logger.error("✗ NO BROWSER FOUND for cookie extraction!")
@@ -366,8 +366,8 @@ def download_youtube_audio(url: str) -> str:
     error_msg = (
         f"YouTube download failed after trying multiple strategies.\n\n"
         f"Attempted:\n"
-        f"1. Download without authentication ❌\n"
-        f"2. Download with browser cookies ({browser_list}) ❌\n\n"
+        f"1. Download without authentication  \n"
+        f"2. Download with browser cookies ({browser_list})  \n\n"
         f"Recent errors:\n{error_summary}\n\n"
         f"Possible solutions:\n"
         f"1. If browsers are running: Close ALL browser windows and try again\n"
@@ -506,6 +506,6 @@ def process_input(source: str) -> list:
     logger.info("Chunking audio...")
     chunks = chunk_audio(wav_path)
     
-    logger.info(f"✓ Audio processing complete - {len(chunks)} chunk(s) created")
+    logger.info(f"  Audio processing complete - {len(chunks)} chunk(s) created")
     return chunks
 
