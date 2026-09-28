@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import { Mic, Zap, Search, Globe, ShieldCheck, FileCheck, Sparkles } from "lucide-react";
 
 const FEATURES = [

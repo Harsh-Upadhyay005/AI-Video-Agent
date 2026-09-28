@@ -1,14 +1,16 @@
 /**
- * Full-page email/password login and signup.
+ * Full-page Clerk authentication — sign in and sign up.
+ * Matches the project theme: cream background (#FDFCF0), lavender accents (#D9CCF5), Baskervville headings.
  */
 
-import React, { useState } from 'react';
-import { Loader2, Mail, Lock, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useState } from 'react';
+import type React from 'react';
+import { SignIn, SignUp } from '@clerk/react';
+import { ArrowLeft, KeyRound, Copy, Check, ExternalLink } from 'lucide-react';
+import { clerkAppearance, isClerkConfigured } from '../lib/clerk';
 
 interface AuthPageProps {
   defaultMode?: 'login' | 'signup';
-  onSuccess?: () => void;
   onBack?: () => void;
 }
 
@@ -16,323 +18,188 @@ type AuthMode = 'login' | 'signup';
 
 export const AuthPage: React.FC<AuthPageProps> = ({
   defaultMode = 'login',
-  onSuccess,
   onBack,
 }) => {
-  const { signIn, signUp, resetPassword, isAuthConfigured } = useAuth();
   const [mode, setMode] = useState<AuthMode>(defaultMode);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const resetForm = () => {
-    setPassword('');
-    setConfirmPassword('');
-    setError(null);
-    setSuccess(null);
-    setShowForgotPassword(false);
+  const envSnippet = 'VITE_CLERK_PUBLISHABLE_KEY=pk_test_YOUR_KEY_HERE';
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(envSnippet);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
-
-  const switchMode = (newMode: AuthMode) => {
-    setMode(newMode);
-    resetForm();
-  };
-
-  const validateEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-  const handleForgotPassword = async () => {
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const { error: resetError } = await resetPassword(email);
-      if (resetError) {
-        setError(resetError.message);
-      } else {
-        setSuccess('Password reset email sent. Check your inbox.');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send reset email');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (showForgotPassword) {
-      await handleForgotPassword();
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
-    if (mode === 'signup' && password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (mode === 'signup') {
-        const { error: signUpError } = await signUp(email, password);
-        if (signUpError) {
-          setError(signUpError.message);
-        } else {
-          setSuccess('Account created. You can now sign in.');
-          setTimeout(() => {
-            switchMode('login');
-            setSuccess(null);
-            onSuccess?.();
-          }, 1200);
-        }
-      } else {
-        const { error: signInError } = await signIn(email, password);
-        if (signInError) {
-          setError(signInError.message);
-        } else {
-          setSuccess('Signed in.');
-          setTimeout(() => {
-            onSuccess?.();
-          }, 400);
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const title = showForgotPassword
-    ? 'Reset password'
-    : mode === 'login'
-      ? 'Welcome back'
-      : 'Create your account';
-
-  const subtitle = showForgotPassword
-    ? 'Enter your email and we will send a reset link.'
-    : mode === 'login'
-      ? 'Sign in with your email to open Video Studio.'
-      : 'Sign up with email. No Google or GitHub required.';
 
   return (
-    <div className="min-h-screen bg-[#FDFCF0] text-[#1A1A1A] pt-24 pb-12 px-4">
-      <div className="mx-auto max-w-5xl grid lg:grid-cols-2 gap-8 items-stretch">
-        <div className="hidden lg:flex flex-col justify-between rounded-3xl border-2 border-[#1A1A1A] bg-[#D9CCF5] p-10 min-h-[560px]">
+    <div className="min-h-screen bg-[#FDFCF0] text-[#1A1A1A] pt-24 pb-12 px-4 flex items-center justify-center">
+      <div className="mx-auto max-w-5xl w-full grid lg:grid-cols-2 gap-8 items-stretch">
+        {/* ── Decorative Left Hero Panel ───────────────────────────── */}
+        <div className="hidden lg:flex flex-col justify-between rounded-3xl border-2 border-[#1A1A1A] bg-[#D9CCF5] p-10 min-h-[580px] shadow-sm">
           <div>
-            <div className="flex items-end gap-0.5 h-5 w-6 mb-6">
-              <span className="w-1 bg-[#1A1A1A] rounded-full h-full" />
-              <span className="w-1 bg-[#1A1A1A] rounded-full h-3/5" />
-              <span className="w-1 bg-[#1A1A1A] rounded-full h-4/5" />
-              <span className="w-1 bg-[#1A1A1A] rounded-full h-1/2" />
+            {/* Animated soundwave bars logo */}
+            <div className="flex items-end gap-1 h-6 w-8 mb-6">
+              <span className="w-1.5 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.1s', height: '100%' }} />
+              <span className="w-1.5 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.3s', height: '60%' }} />
+              <span className="w-1.5 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.2s', height: '85%' }} />
+              <span className="w-1.5 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.4s', height: '50%' }} />
             </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#1A1A1A]/60 mb-3">
-              Flow
+
+            <p className="text-xs font-bold uppercase tracking-widest text-[#1A1A1A]/70 mb-3">
+              Flow • Video Studio
             </p>
-            <h1 className="font-['Baskervville',serif] text-5xl leading-tight">
+            <h1 className="font-['Baskervville',serif] text-5xl leading-tight text-[#1A1A1A]">
               Analyze video.
               <br />
               Ask anything.
             </h1>
-            <p className="mt-6 text-sm leading-relaxed text-[#1A1A1A]/80 max-w-sm">
-              Sign in to transcribe YouTube, audio, and PDF files, then chat with the content using RAG.
+            <p className="mt-6 text-sm leading-relaxed text-[#1A1A1A]/85 max-w-sm">
+              Sign in to unlock AI Video Studio. Transcribe YouTube, MP3/MP4, and PDF documents, then converse with the content using RAG.
             </p>
           </div>
-          <p className="text-xs text-[#1A1A1A]/50">
-            YouTube • MP3/MP4 • PDF • Hinglish
-          </p>
+
+          {/* Feature Badges */}
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {['🎬 YouTube Transcribe', '🎙️ Local Whisper', '📄 PDF RAG', '⚡ Sarvam AI'].map((tag) => (
+                <span
+                  key={tag}
+                  className="px-3.5 py-1.5 rounded-full bg-white/80 border border-[#1A1A1A]/10 text-xs font-semibold text-[#1A1A1A]"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-[#1A1A1A]/60">
+              Secured by Clerk Authentication
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white rounded-3xl border-2 border-[#1A1A1A] shadow-xl p-8 sm:p-10 flex flex-col">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              disabled={loading}
-              className="mb-6 inline-flex items-center gap-2 text-xs font-semibold text-[#8A8A8A] hover:text-[#1A1A1A]"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to overview
-            </button>
-          )}
-
-          <h2 className="font-['Baskervville',serif] text-3xl mb-2">{title}</h2>
-          <p className="text-sm text-[#8A8A8A] mb-8">{subtitle}</p>
-
-          <form onSubmit={handleSubmit} className="space-y-5 flex-1">
-            {!isAuthConfigured && (
-              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                Auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/.env.
-              </div>
+        {/* ── Right Auth Panel ────────────────────────────────────── */}
+        <div className="bg-white rounded-3xl border-2 border-[#1A1A1A] shadow-xl p-8 sm:p-10 flex flex-col justify-between min-h-[580px]">
+          <div>
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="mb-6 inline-flex items-center gap-2 text-xs font-bold tracking-wide text-[#8A8A8A] hover:text-[#1A1A1A] transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to overview
+              </button>
             )}
 
-            {error && (
-              <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            {isClerkConfigured ? (
+              <>
+                {/* Mode toggle */}
+                <div className="flex justify-center mb-6">
+                  <div className="flex items-center gap-1 bg-[#F4F3E8] p-1.5 rounded-full border border-black/10">
+                    <button
+                      onClick={() => setMode('login')}
+                      className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all ${
+                        mode === 'login'
+                          ? 'bg-white text-[#1A1A1A] shadow-xs'
+                          : 'text-[#8A8A8A] hover:text-[#1A1A1A]'
+                      }`}
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => setMode('signup')}
+                      className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all ${
+                        mode === 'signup'
+                          ? 'bg-white text-[#1A1A1A] shadow-xs'
+                          : 'text-[#8A8A8A] hover:text-[#1A1A1A]'
+                      }`}
+                    >
+                      Sign Up
+                    </button>
+                  </div>
+                </div>
+
+                {/* Clerk Embed */}
+                <div className="flex justify-center w-full">
+                  {mode === 'login' ? (
+                    <SignIn
+                      appearance={clerkAppearance}
+                      routing="hash"
+                      signUpUrl="#signup"
+                    />
+                  ) : (
+                    <SignUp
+                      appearance={clerkAppearance}
+                      routing="hash"
+                      signInUrl="#login"
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Setup Instructions when Clerk publishable key is not set */
+              <div className="space-y-6 animate-fade-in py-2">
+                <div className="w-12 h-12 rounded-2xl bg-[#E5D7FA] flex items-center justify-center border border-[#1A1A1A]/10">
+                  <KeyRound className="w-6 h-6 text-[#1A1A1A]" />
+                </div>
+
                 <div>
-                  <p className="text-sm font-semibold text-red-900">Error</p>
-                  <p className="text-xs text-red-700 mt-0.5">{error}</p>
+                  <h2 className="font-['Baskervville',serif] text-3xl text-[#1A1A1A]">
+                    Clerk Authentication Setup
+                  </h2>
+                  <p className="mt-2 text-sm text-[#8A8A8A] leading-relaxed">
+                    Authentication is required to access Video Studio. To connect Clerk, add your Publishable Key to your environment file.
+                  </p>
                 </div>
-              </div>
-            )}
 
-            {success && (
-              <div className="p-4 rounded-xl bg-green-50 border border-green-200 flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-green-900">Success</p>
-                  <p className="text-xs text-green-700 mt-0.5">{success}</p>
+                <div className="space-y-3 bg-[#FDFCF0] rounded-2xl p-5 border-2 border-[#1A1A1A]/10">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A]">
+                    Quick Setup Steps:
+                  </p>
+                  <ol className="text-xs text-[#1A1A1A]/80 space-y-2 list-decimal list-inside leading-relaxed font-medium">
+                    <li>
+                      Create a free app at{' '}
+                      <a
+                        href="https://dashboard.clerk.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[#1A1A1A] underline font-bold inline-flex items-center gap-1"
+                      >
+                        dashboard.clerk.com <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </li>
+                    <li>Go to <strong>API Keys</strong> in your Clerk Dashboard</li>
+                    <li>Copy your <strong>Publishable key</strong> (starts with <code className="bg-white px-1.5 py-0.5 rounded border border-black/10">pk_test_</code>)</li>
+                    <li>Add it to <code className="bg-white px-1.5 py-0.5 rounded border border-black/10">frontend/.env</code></li>
+                  </ol>
+
+                  <div className="mt-4 pt-3 border-t border-[#1A1A1A]/10">
+                    <p className="text-[11px] text-[#8A8A8A] mb-1.5 font-semibold">Environment variable format:</p>
+                    <div className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-black/15 font-mono text-xs text-[#1A1A1A]">
+                      <span className="truncate">{envSnippet}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopy}
+                        className="ml-2 p-1.5 rounded-lg hover:bg-[#F4F3E8] transition-colors shrink-0 text-[#1A1A1A]"
+                        title="Copy variable"
+                      >
+                        {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-sm font-semibold">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8A8A]" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  disabled={loading}
-                  required
-                  autoComplete="email"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] disabled:opacity-50"
-                />
-              </div>
-            </div>
-
-            {!showForgotPassword && (
-              <div className="space-y-2">
-                <label htmlFor="password" className="block text-sm font-semibold">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8A8A]" />
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    disabled={loading}
-                    required
-                    minLength={6}
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] disabled:opacity-50"
-                  />
-                </div>
-              </div>
-            )}
-
-            {!showForgotPassword && mode === 'signup' && (
-              <div className="space-y-2">
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold">
-                  Confirm password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8A8A]" />
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    disabled={loading}
-                    required
-                    autoComplete="new-password"
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] disabled:opacity-50"
-                  />
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading || !isAuthConfigured}
-              className="w-full px-6 py-4 rounded-xl bg-[#1A1A1A] text-white font-semibold hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {showForgotPassword ? 'Sending...' : mode === 'login' ? 'Signing in...' : 'Creating account...'}
-                </>
-              ) : showForgotPassword ? (
-                'Send reset link'
-              ) : mode === 'login' ? (
-                'Sign in'
-              ) : (
-                'Create account'
-              )}
-            </button>
-
-            {!showForgotPassword && mode === 'login' && (
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForgotPassword(true);
-                    setError(null);
-                    setSuccess(null);
-                  }}
-                  disabled={loading}
-                  className="text-sm text-[#8A8A8A] hover:text-[#1A1A1A]"
-                >
-                  Forgot your password?
-                </button>
-              </div>
-            )}
-
-            {showForgotPassword && (
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(false)}
-                  disabled={loading}
-                  className="text-sm text-[#8A8A8A] hover:text-[#1A1A1A]"
-                >
-                  Back to sign in
-                </button>
-              </div>
-            )}
-
-            {!showForgotPassword && (
-              <div className="pt-4 border-t border-[#1A1A1A]/10 text-center">
-                <p className="text-sm text-[#8A8A8A]">
-                  {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-                  <button
-                    type="button"
-                    onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-                    disabled={loading}
-                    className="font-semibold text-[#1A1A1A]"
-                  >
-                    {mode === 'login' ? 'Sign up' : 'Sign in'}
-                  </button>
+                <p className="text-xs text-[#8A8A8A]">
+                  After saving <code className="text-[#1A1A1A] font-mono">frontend/.env</code>, restart the frontend dev server to apply changes.
                 </p>
               </div>
             )}
-          </form>
+          </div>
+
+          <div className="pt-6 border-t border-[#1A1A1A]/10 text-center">
+            <p className="text-xs text-[#8A8A8A]">
+              By proceeding, you agree to our Terms of Service & Privacy Policy.
+            </p>
+          </div>
         </div>
       </div>
     </div>
