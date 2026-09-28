@@ -48,27 +48,27 @@ interface ContentProps {
 
 function Content({ onNavigateToStudio }: ContentProps) {
   return (
-    <div className="relative z-10 flex max-w-3xl flex-col items-center pb-36 text-center px-4">
-      <h1 className="font-['Baskervville',serif] text-5xl leading-[1.15] tracking-tight sm:text-6xl md:text-7xl">
+    <div className="relative z-10 flex max-w-3xl flex-col items-center pb-24 sm:pb-36 text-center px-4 sm:px-6">
+      <h1 className="font-['Baskervville',serif] text-4xl sm:text-6xl md:text-7xl leading-[1.15] tracking-tight">
         <span className="text-[#8A8A8A]">Analyze video.</span>{" "}
         <span className="text-[#1A1A1A]">Ask anything.</span>
       </h1>
 
-      <p className="mt-6 max-w-xl text-base leading-relaxed text-[#1A1A1A]/80 sm:text-lg">
+      <p className="mt-4 sm:mt-6 max-w-xl text-sm sm:text-base md:text-lg leading-relaxed text-[#1A1A1A]/80">
         Transform YouTube videos, MP3 audio files, and MP4 recordings into clean transcripts, executive summaries, and interactive RAG-powered Q&A. Upload any media file or paste a link—then chat with your content instantly.
       </p>
 
-      <div className="mt-8 flex flex-col items-center gap-3">
+      <div className="mt-6 sm:mt-8 flex flex-col items-center gap-3 w-full max-w-md">
         <button
           onClick={onNavigateToStudio}
-          className="flex items-center gap-2 rounded-lg border border-black bg-[#D9CCF5] px-6 py-3.5 text-sm font-semibold text-[#1A1A1A] transition-all hover:scale-105 active:scale-95 shadow-sm hover:bg-[#cbb8f0]"
+          className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-black bg-[#D9CCF5] px-6 py-3.5 text-sm sm:text-base font-semibold text-[#1A1A1A] transition-all hover:scale-105 active:scale-95 shadow-sm hover:bg-[#cbb8f0]"
         >
           <svg className="w-4 h-4 text-[#1A1A1A]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
           <span>Launch Video Studio</span>
         </button>
-        <p className="text-xs text-[#8A8A8A] font-medium tracking-wide">
+        <p className="text-[11px] sm:text-xs text-[#8A8A8A] font-medium tracking-wide text-center">
           YouTube URLs • MP3/MP4/WAV Uploads • Drag & Drop • 12 Formats • Hinglish Support
         </p>
       </div>
@@ -83,7 +83,7 @@ function SVGAnimation() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[400px] w-[100vw] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+      className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[400px] w-[100vw] -translate-x-1/2 -translate-y-1/2 overflow-visible hidden md:block"
     >
       <svg
         className="w-full h-full"
@@ -150,13 +150,13 @@ interface HeroProps {
 
 function Hero({ onNavigateToStudio }: HeroProps) {
   return (
-    <section className="relative flex h-full min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#FDFCF0] px-6 py-16">
+    <section className="relative flex min-h-[90vh] sm:min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#FDFCF0] px-4 sm:px-6 py-20 sm:py-24">
       <Content onNavigateToStudio={onNavigateToStudio} />
 
-      <div className="absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-3">
-        <div className="relative w-28 overflow-visible">
+      <div className="absolute bottom-16 sm:bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-3">
+        <div className="relative w-24 sm:w-28 overflow-visible">
           <SVGAnimation />
-          <div className="relative z-10 flex h-20 w-full items-center overflow-hidden rounded-full border-2 border-black bg-white shadow-sm">
+          <div className="relative z-10 flex h-16 sm:h-20 w-full items-center overflow-hidden rounded-full border-2 border-black bg-white shadow-sm">
             <WaveformMarquee />
           </div>
         </div>
@@ -190,7 +190,7 @@ export const WisprHero: React.FC<WisprHeroProps> = ({
   }, []);
 
   return (
-    <div className="h-full min-h-full w-full">
+    <div className="h-full min-h-full w-full overflow-hidden">
       <Hero onNavigateToStudio={onNavigateToStudio} />
     </div>
   );
@@ -213,7 +213,7 @@ export default function WisprFlowAnimation() {
   }, []);
 
   return (
-    <div className="h-full min-h-full w-full">
+    <div className="h-full min-h-full w-full overflow-hidden">
       <Hero />
     </div>
   );
