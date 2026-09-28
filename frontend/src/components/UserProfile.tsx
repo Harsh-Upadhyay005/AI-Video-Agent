@@ -141,36 +141,36 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-2xl bg-[#FDFCF0] rounded-3xl border-2 border-[#1A1A1A] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-2xl bg-[#FDFCF0] rounded-2xl sm:rounded-3xl border-2 border-[#1A1A1A] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-[#1A1A1A]/10 shrink-0">
+        <div className="p-4 sm:p-6 border-b border-[#1A1A1A]/10 shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#D9CCF5] flex items-center justify-center">
-                <User className="w-6 h-6 text-[#1A1A1A]" />
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#D9CCF5] flex items-center justify-center shrink-0">
+                <User className="w-5 h-5 sm:w-6 sm:h-6 text-[#1A1A1A]" />
               </div>
-              <div>
-                <h2 className="font-['Baskervville',serif] text-2xl text-[#1A1A1A]">
+              <div className="min-w-0">
+                <h2 className="font-['Baskervville',serif] text-xl sm:text-2xl text-[#1A1A1A] truncate">
                   Account Settings
                 </h2>
-                <p className="text-xs text-[#8A8A8A]">{user.email}</p>
+                <p className="text-xs text-[#8A8A8A] truncate">{user.email}</p>
               </div>
             </div>
             <button
               onClick={onClose}
               disabled={loading}
-              className="w-10 h-10 rounded-full bg-[#1A1A1A]/10 hover:bg-[#1A1A1A]/20 flex items-center justify-center transition-colors disabled:opacity-50"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1A1A1A]/10 hover:bg-[#1A1A1A]/20 flex items-center justify-center transition-colors disabled:opacity-50 shrink-0 ml-2"
             >
-              <X className="w-5 h-5 text-[#1A1A1A]" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5 text-[#1A1A1A]" />
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mt-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-3 sm:mt-4">
             <button
               onClick={() => setActiveTab('profile')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                 activeTab === 'profile'
                   ? 'bg-[#1A1A1A] text-white'
                   : 'bg-white text-[#8A8A8A] hover:text-[#1A1A1A]'
@@ -180,7 +180,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
             </button>
             <button
               onClick={() => setActiveTab('security')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                 activeTab === 'security'
                   ? 'bg-[#1A1A1A] text-white'
                   : 'bg-white text-[#8A8A8A] hover:text-[#1A1A1A]'
@@ -190,7 +190,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
             </button>
             <button
               onClick={() => setActiveTab('data')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                 activeTab === 'data'
                   ? 'bg-[#1A1A1A] text-white'
                   : 'bg-white text-[#8A8A8A] hover:text-[#1A1A1A]'
@@ -202,7 +202,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Messages */}
           {error && (
             <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
