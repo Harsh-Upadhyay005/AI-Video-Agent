@@ -1,33 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Youtube, Upload, Sparkles, FileAudio, X, Check, Loader2, Play, FileText, AlertCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import type React from 'react';
+import { Youtube, Upload, Sparkles, FileAudio, X, Loader2, AlertCircle } from 'lucide-react';
 import apiClient from '../api/client';
 import type { AnalysisData } from '../types/analysis';
 
 interface AudioVideoAnalyzerProps {
   onAnalysisComplete: (result: AnalysisData) => void;
-  existingResult: AnalysisData | null;
+  existingResult?: AnalysisData | null;
 }
 
 type InputMode = 'url' | 'file';
 type Language = 'english' | 'hinglish';
 
-function AudioVideoAnalyzer({ onAnalysisComplete, existingResult }: AudioVideoAnalyzerProps) {
+function AudioVideoAnalyzer({ onAnalysisComplete }: AudioVideoAnalyzerProps) {
   const [url, setUrl] = useState('');
   const [language, setLanguage] = useState<Language>('english');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalysisData | null>(existingResult);
   const [inputMode, setInputMode] = useState<InputMode>('url');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (existingResult && existingResult.type !== 'pdf') {
-      setResult(existingResult);
-    }
-  }, [existingResult]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +39,6 @@ function AudioVideoAnalyzer({ onAnalysisComplete, existingResult }: AudioVideoAn
 
     setLoading(true);
     setError(null);
-    setResult(null);
     setUploadProgress(0);
 
     try {
@@ -65,7 +58,11 @@ function AudioVideoAnalyzer({ onAnalysisComplete, existingResult }: AudioVideoAn
         job_id: data.job_id,
       };
       
-      setResult(analysis);
+      setUrl('');
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       if (onAnalysisComplete) {
         onAnalysisComplete(analysis);
       }
@@ -76,14 +73,6 @@ function AudioVideoAnalyzer({ onAnalysisComplete, existingResult }: AudioVideoAn
       setLoading(false);
       setUploadProgress(0);
     }
-  };
-
-  const handleNewAnalysis = () => {
-    setResult(null);
-    setUrl('');
-    setSelectedFile(null);
-    setError(null);
-    setUploadProgress(0);
   };
 
   const validateAndSetFile = (file: File) => {
@@ -134,92 +123,7 @@ function AudioVideoAnalyzer({ onAnalysisComplete, existingResult }: AudioVideoAn
 
   return (
     <div className="w-full">
-      {result ? (
-        <div className="space-y-6">
-          {/* Results Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-[#1A1A1A]/10">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9CCF5]/40 text-[#1A1A1A] text-xs font-semibold uppercase tracking-wider mb-2">
-                <Sparkles className="w-3.5 h-3.5" />
-                Analysis Complete
-              </div>
-              <h2 className="font-['Baskervville',serif] text-2xl text-[#1A1A1A]">
-                {result.title}
-              </h2>
-            </div>
-            <button
-              onClick={handleNewAnalysis}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#1A1A1A]/20 text-[#1A1A1A] text-sm font-semibold hover:border-[#1A1A1A] transition-all flex items-center gap-2"
-            >
-              <Play className="w-4 h-4" />
-              New Analysis
-            </button>
-          </div>
-
-          {/* Results Grid */}
-          <div className="grid gap-4">
-            {result.summary && (
-              <div className="bg-[#FDFCF0] rounded-2xl border border-[#1A1A1A]/10 p-5">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Summary
-                </h3>
-                <p className="text-sm text-[#1A1A1A] leading-relaxed">{result.summary}</p>
-              </div>
-            )}
-
-            {result.action_items && (
-              <div className="bg-[#FDFCF0] rounded-2xl border border-[#1A1A1A]/10 p-5">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  Action Items
-                </h3>
-                <pre className="text-sm text-[#1A1A1A] whitespace-pre-wrap font-sans">{result.action_items}</pre>
-              </div>
-            )}
-
-            {result.key_decisions && (
-              <div className="bg-[#FDFCF0] rounded-2xl border border-[#1A1A1A]/10 p-5">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  Key Decisions
-                </h3>
-                <pre className="text-sm text-[#1A1A1A] whitespace-pre-wrap font-sans">{result.key_decisions}</pre>
-              </div>
-            )}
-
-            {result.open_questions && (
-              <div className="bg-[#FDFCF0] rounded-2xl border border-[#1A1A1A]/10 p-5">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  Open Questions
-                </h3>
-                <pre className="text-sm text-[#1A1A1A] whitespace-pre-wrap font-sans">{result.open_questions}</pre>
-              </div>
-            )}
-
-            {result.transcript && (
-              <details className="bg-[#FDFCF0] rounded-2xl border border-[#1A1A1A]/10 p-5 group">
-                <summary className="text-sm font-bold uppercase tracking-wider text-[#1A1A1A] cursor-pointer flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Full Transcript (Click to expand)
-                </summary>
-                <pre className="mt-4 text-xs text-[#8A8A8A] whitespace-pre-wrap font-mono max-h-96 overflow-y-auto">
-                  {result.transcript}
-                </pre>
-              </details>
-            )}
-          </div>
-
-          {/* Next Step */}
-          <div className="bg-[#D9CCF5]/20 rounded-2xl border-2 border-[#D9CCF5]/40 p-4 text-center">
-            <p className="text-sm text-[#1A1A1A]">
-              💬 Ready to explore more? <strong>Scroll down</strong> to the chat section to ask questions about this content!
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
+      <div className="space-y-6">
           {/* Input Mode Selector */}
           <div className="flex justify-center gap-3 mb-6">
             <button
@@ -437,7 +341,6 @@ function AudioVideoAnalyzer({ onAnalysisComplete, existingResult }: AudioVideoAn
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }
