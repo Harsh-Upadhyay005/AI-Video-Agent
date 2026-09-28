@@ -1,10 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type React from 'react';
+import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { isClerkConfigured } from '../lib/clerk';
 
 interface HeaderProps {
   onNavigateToStudio: () => void;
   onNavigateToHome: () => void;
   activeView: 'home' | 'studio';
 }
+
+const ClerkUserSection: React.FC = () => {
+  return (
+    <>
+      <Show when="signed-out">
+        <div className="flex items-center gap-2 pl-2 border-l border-black/10">
+          <SignInButton mode="modal">
+            <button className="px-3 py-2 text-xs font-bold text-[#1A1A1A] transition-colors hover:text-[#6D5A9E]">
+              Sign In
+            </button>
+          </SignInButton>
+          <SignUpButton mode="modal">
+            <button className="rounded-full border border-black/10 bg-[#E5D7FA] px-3.5 py-2 text-xs font-bold text-[#1A1A1A] shadow-xs transition-all hover:bg-[#D9CCF5] hover:scale-105 active:scale-95">
+              Sign Up
+            </button>
+          </SignUpButton>
+        </div>
+      </Show>
+      <Show when="signed-in">
+        <div className="flex items-center gap-2 pl-2 border-l border-black/10">
+          <UserButton
+            appearance={{
+              elements: {
+                userButtonAvatarBox: 'w-8 h-8 rounded-full border border-black/15 shadow-xs',
+                userButtonPopoverCard: 'rounded-2xl border-2 border-[#1A1A1A]/10 shadow-xl bg-[#FDFCF0]',
+              },
+            }}
+          />
+        </div>
+      </Show>
+    </>
+  );
+};
 
 export const Header: React.FC<HeaderProps> = ({
   onNavigateToStudio,
@@ -120,6 +156,8 @@ export const Header: React.FC<HeaderProps> = ({
               </svg>
               <span>Launch Studio</span>
             </button>
+
+            {isClerkConfigured && <ClerkUserSection />}
           </div>
         </div>
       </header>
