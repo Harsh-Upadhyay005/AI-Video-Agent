@@ -3,7 +3,7 @@
  * Allows users to manage their account settings and export data
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, User, Mail, Lock, Download, Loader2, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
@@ -25,7 +25,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
   const [fullName, setFullName] = useState(
     (user?.user_metadata?.full_name as string) || ''
   );
-  const [currentPassword, setCurrentPassword] = useState('');
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -76,7 +76,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => 
         setError(error.message);
       } else {
         setSuccess('Password updated successfully!');
-        setCurrentPassword('');
+
         setNewPassword('');
         setConfirmPassword('');
       }
