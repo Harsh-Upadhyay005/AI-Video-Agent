@@ -301,10 +301,10 @@ def run_pipeline(
         logger.info("[Pipeline] STEP 5: Analysis skipped (INGEST_ONLY mode)")
         logger.info("[Pipeline] Users can request analysis later via API")
         
-        summary = "Analysis not requested during ingestion. Use the analysis API to generate summaries."
-        action_items = "Analysis not requested during ingestion."
-        key_decisions = "Analysis not requested during ingestion."
-        open_questions = "Analysis not requested during ingestion."
+        summary = ""
+        action_items = ""
+        key_decisions = ""
+        open_questions = ""
         
         stage_results['analysis'] = StageResult(
             stage="analysis",
