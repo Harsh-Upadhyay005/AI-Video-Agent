@@ -1,305 +1,303 @@
-# 🎥 AI Video Agent
+<div align="center">
 
-**Transform video/audio content into actionable insights using AI.**
+# 🎬 Flow • AI Video Agent
+### Intelligent Multi-Modal Video, Audio & Document Intelligence Platform
 
-Automatically transcribe, summarize, and chat with your video/audio files (YouTube, MP3, MP4, PDF) using OpenAI Whisper, Mistral AI, and RAG technology.
+**Transform YouTube videos, audio recordings, and PDF documents into structured transcripts, executive summaries, and interactive RAG-powered conversations.**
+
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![Clerk](https://img.shields.io/badge/Clerk-Authentication-6C47FF?style=for-the-badge&logo=clerk&logoColor=white)](https://clerk.com)
+[![Whisper](https://img.shields.io/badge/OpenAI-Whisper-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/whisper)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-FF6F61?style=for-the-badge)](https://www.trychroma.com)
+
+[Explore Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Environment Setup](#-configuration) • [Documentation](#-documentation)
+
+</div>
 
 ---
 
-## ✨ Features
+## 🌟 Overview
 
-- 🎬 **Multiple Input Sources**: YouTube URLs, MP3/MP4 files, PDF documents
-- 🗣️ **Multi-Language**: English and Hinglish (Hindi+English) support
-- 📝 **Auto-Transcription**: OpenAI Whisper + Sarvam AI for accurate transcription
-- 🤖 **AI Analysis**: Auto-generate summaries, action items, and key decisions
-- 💬 **RAG Chat**: Ask questions about your content with intelligent query routing
-- ☁️ **Cloud Storage**: Optional Supabase integration for permanent file storage
-- 🎨 **Modern UI**: Beautiful React frontend with real-time progress tracking
+**Flow (AI Video Agent)** is a full-stack, enterprise-grade multi-modal AI platform designed to eliminate hours of manual note-taking and video reviews. By pairing local speech-to-text models with modern vector search and Large Language Models, Flow transcribes media in seconds, indexes knowledge into ChromaDB, and allows users to converse directly with video or document content using Retrieval-Augmented Generation (RAG).
+
+---
+
+## ✨ Key Features
+
+### 🎥 Multi-Format Media Ingestion
+- **YouTube Ingestion**: Download and extract high-bitrate audio directly from YouTube links via `yt-dlp`.
+- **Local Audio/Video Upload**: Supports MP3, MP4, WAV, M4A, FLAC, OGG, AAC, MOV, MKV, WebM, and AVI (up to 500MB).
+- **PDF Document Processing**: Upload whitepapers, research articles, or meeting decks for automated text extraction and vector indexing.
+
+### 🎙️ Dual-Engine Speech-to-Text
+- **OpenAI Whisper (Local)**: High-accuracy transcription running on CPU or NVIDIA CUDA GPU (`tiny`, `base`, `small`, `medium`, `large-v3`).
+- **Sarvam AI Engine**: State-of-the-art Hindi and Hinglish (code-switched speech) transcription for bilingual audio.
+
+### 🧠 Intelligent Vector RAG Engine
+- **Query Routing**: Automatically classifies queries into `LOCAL_QA` (specific timestamps/sections), `GLOBAL_SUMMARY` (macro insights), or `TOPIC_EXTRACTION`.
+- **ChromaDB Integration**: Local high-speed vector embeddings generated via `sentence-transformers/all-MiniLM-L6-v2`.
+- **Executive Synthesis**: Powered by Mistral AI (`mistral-small-latest`) to generate summaries, action items, key decisions, and timestamped answers.
+
+### 🔐 Clerk Authentication & Studio Security
+- **Protected Video Studio**: Access to media analyzers is guarded by Clerk authentication.
+- **Project-Themed UI**: Beautiful authentication flows customized with the project's cream (`#FDFCF0`) and lavender (`#D9CCF5`) design tokens.
+- **Top Navigation User Button**: Seamless profile management and sign-out controls built directly into the header.
+
+### 📱 Premium, Fully Responsive UX
+- **Fluid Design System**: Baskervville editorial serif typography combined with Inter body text and dynamic soundwave animations.
+- **Dictation Playground**: Live benchmark simulation showing 120x speedup over manual video review.
+- **Mobile-First Responsive Layout**: Optimized across smartphones, tablets, laptops, and ultra-wide displays.
+
+---
+
+## 🏗️ Architecture
+
+```
+                    ┌───────────────────────────────────┐
+                    │      React 18 + Vite Frontend     │
+                    │  (Tailwind CSS + Clerk Auth SDK)  │
+                    └─────────────────┬─────────────────┘
+                                      │ REST API / JSON
+                                      ▼
+                    ┌───────────────────────────────────┐
+                    │       FastAPI Backend Server      │
+                    │      (Input Validation & CORS)    │
+                    └───────┬───────────────────┬───────┘
+                            │                   │
+             Media Ingest   ▼                   ▼   Documents
+    ┌───────────────────────────────┐   ┌───────────────────────────────┐
+    │       Audio / Video Engine    │   │         PDF Processor         │
+    │  - yt-dlp (YouTube stream)    │   │  - PyPDF2 text extraction     │
+    │  - FFmpeg (16kHz mono audio)  │   │  - Page-level segmentation    │
+    │  - OpenAI Whisper / Sarvam AI │   └───────────────┬───────────────┘
+    └───────────────┬───────────────┘                   │
+                    │                                   │
+                    ▼                                   ▼
+    ┌───────────────────────────────────────────────────────────────────┐
+    │              Chunking & ChromaDB Vector Store                     │
+    │     (sentence-transformers/all-MiniLM-L6-v2 Embeddings)           │
+    └─────────────────────────────────┬─────────────────────────────────┘
+                                      │
+                                      ▼
+    ┌───────────────────────────────────────────────────────────────────┐
+    │               RAG Engine & Intelligent Query Router               │
+    │      - LOCAL_QA (Top-8 Vector Chunk Retrieval)                    │
+    │      - GLOBAL_SUMMARY (Precomputed Macro Metadata)                │
+    │      - LLM Synthesis via Mistral AI                               │
+    └─────────────────────────────────┬─────────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌───────────────────────────────────┐
+                    │   Interactive Streaming Q&A Chat  │
+                    └───────────────────────────────────┘
+```
+
+---
+
+## 📁 Project Structure
+
+```
+AI Video Agent/
+├── api/                       # FastAPI routes, schemas, and endpoints
+│   ├── main.py                # Server entrypoint and CORS middleware
+│   └── routes/                # Endpoint handlers (analysis, chat, health)
+├── core/                      # Application core logic & AI services
+│   ├── transcriber.py         # Whisper & Sarvam AI transcription
+│   ├── rag_engine.py          # Vector retrieval and query router
+│   ├── vector_store.py        # ChromaDB embeddings manager
+│   ├── global_metadata.py     # Macro summaries and concept storage
+│   ├── global_analyzer.py     # Hierarchical map-reduce analyzer
+│   ├── pdf_processor.py       # PDF document parser
+│   ├── supabase_client.py     # Optional cloud storage client
+│   └── validators.py          # Security & file sanity checks
+├── frontend/                  # Modern React + Vite application
+│   ├── src/
+│   │   ├── components/        # UI components (Header, Studio, Chat, Auth)
+│   │   ├── contexts/          # State and auth context providers
+│   │   ├── lib/               # Clerk & Supabase configurations
+│   │   ├── types/             # TypeScript interface definitions
+│   │   ├── App.tsx            # Main application router and state
+│   │   └── index.css          # Design system, animations & utilities
+│   ├── package.json           # Frontend dependencies
+│   ├── vite.config.ts         # Vite bundler configuration
+│   └── tailwind.config.js     # Tailwind CSS theme extension
+├── docs/                      # Technical feature guides & SQL schemas
+│   ├── ARCHITECTURE_DIAGRAM.md
+│   ├── ENHANCED_RAG_GUIDE.md
+│   ├── FILE_UPLOAD_FEATURE.md
+│   ├── PDF_SUPPORT_GUIDE.md
+│   ├── SUPABASE_SETUP_GUIDE.md
+│   ├── YOUTUBE_DOWNLOAD_TROUBLESHOOTING.md
+│   └── supabase_setup.sql
+├── tests/                     # Automated Pytest test suite
+│   ├── test_api.py
+│   ├── test_validators.py
+│   └── conftest.py
+├── requirements.txt           # Python backend dependencies
+├── .env.example               # Root environment variable template
+└── README.md                  # Project documentation
+```
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+
-- Node.js 16+ (for frontend)
-- FFmpeg (for audio processing)
+- **Python**: Version `3.9` or higher
+- **Node.js**: Version `18.x` or higher
+- **FFmpeg**: Required for audio normalization and video slicing ([Download FFmpeg](https://ffmpeg.org/download.html))
 
-### 1. Install Dependencies
+---
+
+### Step 1: Clone the Repository
+```bash
+git clone https://github.com/Harsh-Upadhyay005/AI-Video-Agent.git
+cd "AI Video Agent"
+```
+
+---
+
+### Step 2: Set Up Backend Environment
 
 ```bash
-# Install Python packages
-pip install -r requirements.txt
+# Create and activate Python virtual environment
+python -m venv .venv
 
-# Install frontend packages
+# Windows:
+.venv\Scripts\activate
+
+# Linux / macOS:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+Create your `.env` file from the template:
+```bash
+cp .env.example .env
+```
+
+---
+
+### Step 3: Set Up Frontend & Clerk Auth
+
+```bash
 cd frontend
 npm install
-cd ..
 ```
 
-### 2. Configure Environment
-
+Create your `frontend/.env` file:
 ```bash
-# Copy example environment file
-copy .env.example .env
-
-# Edit .env and add your API keys:
-# - MISTRAL_API_KEY (required)
-# - SARVAM_API_KEY (for Hinglish)
-# - SUPABASE_URL & SUPABASE_ANON_KEY (optional, for cloud storage)
+cp .env.example .env
 ```
 
-### 3. Start the Application
+Add your Clerk publishable key from your [Clerk Dashboard](https://dashboard.clerk.com):
+```env
+VITE_API_URL=http://localhost:8000
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key_here
+```
 
+---
+
+### Step 4: Run the Application
+
+#### Terminal 1 — Start FastAPI Backend:
 ```bash
-# Start backend
-python -m uvicorn api.main:app --reload
+# In the project root (with .venv active)
+python -m uvicorn api.main:app --reload --port 8000
+```
+*API will be live at `http://localhost:8000` (Interactive Swagger Docs at `http://localhost:8000/docs`).*
 
-# In another terminal, start frontend
+#### Terminal 2 — Start React Frontend:
+```bash
 cd frontend
 npm run dev
 ```
-
-### 4. Open in Browser
-
-Navigate to: http://localhost:5173
+*Frontend will launch at `http://localhost:5173`.*
 
 ---
 
-## 📚 Documentation
+## ⚙️ Configuration Reference
 
-All documentation is in the **`docs/`** folder:
+### Backend (`.env`)
+| Variable | Required | Description | Default |
+|:---|:---:|:---|:---|
+| `MISTRAL_API_KEY` | **Yes** | API key from [Mistral AI Console](https://console.mistral.ai/) | — |
+| `MISTRAL_MODEL` | No | LLM model name | `mistral-small-latest` |
+| `WHISPER_MODEL` | No | Whisper model size (`tiny`, `base`, `small`, `medium`, `large-v3`) | `small` |
+| `WHISPER_DEVICE` | No | Execution device (`auto`, `cpu`, `cuda`) | `auto` |
+| `WHISPER_COMPUTE_TYPE` | No | Model quantization (`int8`, `float16`, `float32`) | `int8` |
+| `SARVAM_API_KEY` | Optional | API key from [Sarvam AI](https://sarvam.ai/) for Hinglish speech | — |
+| `SUPABASE_URL` | Optional | Supabase project URL for cloud file storage | — |
+| `SUPABASE_ANON_KEY` | Optional | Supabase public anonymous key | — |
+| `MAX_UPLOAD_SIZE_MB` | No | Maximum file upload limit in megabytes | `500` |
 
-### Getting Started
-- **[START_HERE.md](docs/START_HERE.md)** - Complete setup guide
-- **[QUICKSTART.md](QUICKSTART.md)** - Quick start commands
-
-### Features
-- **[ENHANCED_RAG_GUIDE.md](docs/ENHANCED_RAG_GUIDE.md)** - Advanced RAG with query routing
-- **[PDF_SUPPORT_GUIDE.md](docs/PDF_SUPPORT_GUIDE.md)** - Upload and analyze PDFs
-- **[FILE_UPLOAD_FEATURE.md](docs/FILE_UPLOAD_FEATURE.md)** - File upload documentation
-
-### Supabase Integration (Optional)
-- **[SUPABASE_SETUP_GUIDE.md](docs/SUPABASE_SETUP_GUIDE.md)** - Complete setup tutorial
-- **[SUPABASE_INTEGRATION_SUMMARY.md](docs/SUPABASE_INTEGRATION_SUMMARY.md)** - Quick reference
-- **[supabase_setup.sql](docs/supabase_setup.sql)** - Database schema
-
-### Architecture & Development
-- **[ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md)** - System architecture
-- **[FRONTEND_INTEGRATION_GUIDE.md](docs/FRONTEND_INTEGRATION_GUIDE.md)** - Frontend details
-
----
-
-## 🎯 Usage
-
-### Upload & Analyze
-
-1. **YouTube URL**: Paste any YouTube video URL
-2. **Audio/Video File**: Upload MP3, MP4, WAV, etc.
-3. **PDF Document**: Upload and analyze PDF documents
-4. **Select Language**: English or Hinglish
-5. **Click Analyze**: Watch real-time progress
-6. **Get Results**: Summary, transcript, action items, and more
-
-### Chat with Your Content
-
-Ask questions about your processed content:
-
-**Local Questions** (specific):
-- "What is RAG?"
-- "What does page 5 say about AI?"
-
-**Global Questions** (whole document):
-- "What are the 7 key concepts discussed?"
-- "Summarize the entire video"
-- "List all main topics covered"
+### Frontend (`frontend/.env`)
+| Variable | Required | Description |
+|:---|:---:|:---|
+| `VITE_API_URL` | **Yes** | Backend FastAPI server URL (`http://localhost:8000`) |
+| `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Publishable key from [Clerk Dashboard](https://dashboard.clerk.com) (`pk_test_...`) |
 
 ---
 
-## 🛠️ Tech Stack
+## 📡 API Endpoints Overview
 
-### Backend
-- **FastAPI** - Modern Python web framework
-- **OpenAI Whisper** - Speech-to-text transcription
-- **Mistral AI** - LLM for summarization and insights
-- **ChromaDB** - Vector database for RAG
-- **LangChain** - LLM orchestration
-- **Supabase** - Optional cloud storage (Python SDK)
-
-### Frontend
-- **React** + **Vite** - Fast modern UI
-- **TailwindCSS** - Utility-first styling
-- **Lucide Icons** - Beautiful icons
-
-### Processing
-- **FFmpeg** - Audio/video processing
-- **PyPDF2** - PDF text extraction
-- **yt-dlp** - YouTube downloader
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `GET` | `/api/health/ping` | Health check & connectivity probe |
+| `POST` | `/api/v1/analyze` | Start asynchronous analysis for YouTube URL |
+| `GET` | `/api/v1/status/{job_id}` | Poll progress and retrieve completed analysis |
+| `POST` | `/api/v1/upload` | Multipart file upload and analysis (Audio/Video/PDF) |
+| `POST` | `/api/v1/chat` | Send question to vector RAG engine with session context |
+| `DELETE`| `/api/v1/chat/session/{id}` | Clear conversation session cache |
 
 ---
 
-## 📦 Project Structure
+## 📚 Technical Documentation
 
-```
-AI Video Agent/
-├── api/                    # FastAPI backend
-│   ├── main.py            # Main API app
-│   └── routes/            # API endpoints
-├── core/                   # Core business logic
-│   ├── transcriber.py     # Whisper transcription
-│   ├── rag_engine.py      # RAG with query routing
-│   ├── supabase_*.py      # Supabase integration
-│   └── ...
-├── frontend/              # React frontend
-│   └── src/
-│       └── components/    # UI components
-├── utils/                 # Utility functions
-├── docs/                  # 📚 All documentation
-├── requirements.txt       # Python dependencies
-└── .env.example          # Environment template
-```
-
----
-
-## 🔧 Configuration
-
-### Required Environment Variables
-
-```env
-# Mistral AI (Required)
-MISTRAL_API_KEY=your_mistral_api_key
-
-# Sarvam AI (Required for Hinglish)
-SARVAM_API_KEY=your_sarvam_api_key
-```
-
-### Optional Environment Variables
-
-```env
-# Supabase (For cloud storage)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_anon_key
-
-# Whisper Configuration
-WHISPER_MODEL=small  # tiny, base, small, medium, large
-```
-
-See `.env.example` for all options.
-
----
-
-## 🎨 Features in Detail
-
-### Enhanced RAG System
-- **Query Routing**: Automatically classifies questions as local or global
-- **Multi-Strategy Retrieval**: Different approaches for different question types
-- **Global Metadata**: Precomputed topics and concepts for fast whole-video queries
-- **Map-Reduce**: Handles long transcripts with hierarchical summarization
-
-### Supabase Integration (Optional)
-- **Permanent Storage**: Files stored forever in cloud
-- **Public URLs**: Direct links to download files
-- **Metadata Database**: Track all processed files
-- **Multi-Device Access**: Access from anywhere
-
-### File Upload Support
-- **Multiple Formats**: MP3, MP4, WAV, M4A, AVI, MOV, MKV, WebM, PDF
-- **Large Files**: Up to 500MB
-- **Drag & Drop**: Easy file upload interface
-- **Progress Tracking**: Real-time processing status
+Explore detailed documentation in the [`docs/`](docs/) directory:
+- 🏛️ **[System Architecture](docs/ARCHITECTURE_DIAGRAM.md)**: Deep dive into component interaction and data flows.
+- 🔍 **[Enhanced RAG Guide](docs/ENHANCED_RAG_GUIDE.md)**: Query routing strategies and map-reduce summarization.
+- 📁 **[File Upload Engine](docs/FILE_UPLOAD_FEATURE.md)**: Handling multi-format audio and video processing pipelines.
+- 📄 **[PDF Analysis Guide](docs/PDF_SUPPORT_GUIDE.md)**: Document segmentation and text extraction architecture.
+- ☁️ **[Supabase Cloud Setup](docs/SUPABASE_SETUP_GUIDE.md)**: Setting up permanent cloud storage buckets and metadata schemas.
+- 🛠️ **[YouTube Troubleshooting](docs/YOUTUBE_DOWNLOAD_TROUBLESHOOTING.md)**: Resolving common `yt-dlp` stream extraction errors.
 
 ---
 
 ## 🧪 Testing
 
+Run unit and integration tests using pytest:
+
 ```bash
-# Test RAG query routing
-python test_enhanced_rag.py
+# Run all tests
+pytest
 
-# Test environment configuration
-python test_env_loading.py
+# Run tests with output verbosity
+pytest -v -s
+
+# Run specific validator test
+pytest tests/test_validators.py
 ```
-
----
-
-## 🐛 Troubleshooting
-
-### Backend Won't Start
-- Check `.env` file has required API keys
-- Verify Python packages installed: `pip install -r requirements.txt`
-- Check FFmpeg is installed: `ffmpeg -version`
-
-### Frontend Won't Start
-- Verify Node.js installed: `node --version`
-- Install packages: `cd frontend && npm install`
-- Check port 5173 is available
-
-### Transcription Fails
-- Verify API keys in `.env` are correct (no quotes!)
-- Check internet connection for YouTube downloads
-- Ensure audio files are valid formats
-
-See **[docs/](docs/)** folder for detailed troubleshooting guides.
-
----
-
-## 📝 Scripts
-
-### Backend
-- `start.bat` - Start backend server
-- `install_pdf_support.bat` - Install PDF support
-- `install_supabase.bat` - Install Supabase SDK
-
-### Frontend
-- `frontend/RESTART_FRONTEND.bat` - Restart frontend
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! This is an open development project.
 
 ---
 
 ## 📄 License
 
-This project is open source. See individual package licenses for dependencies.
+Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-## 🎉 Credits
+<div align="center">
 
-Built with:
-- OpenAI Whisper
-- Mistral AI
-- Sarvam AI
-- LangChain
-- Supabase
-- FastAPI
-- React
+**Built with precision using OpenAI Whisper, Mistral AI, ChromaDB, and React.**
 
----
+⭐ If you find this project helpful, give it a star on GitHub!
 
-## 📞 Support
-
-- **Documentation**: Check the `docs/` folder
-- **Issues**: Review troubleshooting guides in docs
-- **Logs**: Check `logs/` directory for error details
-
----
-
-## 🚀 What's Next?
-
-- ✅ Enhanced RAG with query routing
-- ✅ PDF document support
-- ✅ Supabase cloud storage
-- 🔜 OCR for scanned PDFs
-- 🔜 Multi-document queries
-- 🔜 User authentication
-- 🔜 Export to Notion/Markdown
-
----
-
-**Made with ❤️ for developers who want to make video content searchable and actionable.**
-
-**Start here**: Read `docs/START_HERE.md` for complete setup instructions!
+</div>
