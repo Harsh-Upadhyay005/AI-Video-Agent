@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 interface Props {
@@ -78,8 +78,7 @@ class ErrorBoundary extends Component<Props, State> {
                 We encountered an unexpected error. Don't worry, your work is safe.
               </p>
 
-              {/* Error Details (collapsible in production) */}
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <details className="mb-8 bg-[#FDFCF0] rounded-xl p-4 border border-[#1A1A1A]/10">
                   <summary className="cursor-pointer font-semibold text-sm text-[#1A1A1A] mb-2">
                     Error Details (Development Mode)
