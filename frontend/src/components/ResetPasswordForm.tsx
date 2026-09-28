@@ -2,7 +2,8 @@
  * Completes a password reset after the user follows the email link.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type React from 'react';
 import { Loader2, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
