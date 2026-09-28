@@ -36,29 +36,29 @@ const FEATURES = [
 
 export const FeatureShowcase: React.FC = () => {
   return (
-    <section id="features" className="py-20 px-6 bg-[#FDFCF0] border-t border-[#1A1A1A]/10">
+    <section id="features" className="py-14 sm:py-20 px-4 sm:px-6 bg-[#FDFCF0] border-t border-[#1A1A1A]/10">
       <div className="max-w-6xl mx-auto">
         {/* Section Header */}
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#1A1A1A] text-[#FDFCF0] text-xs font-semibold uppercase tracking-wider mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-[#D9CCF5]" /> Engineered for Excellence
+        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-16">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1 rounded-full bg-[#1A1A1A] text-[#FDFCF0] text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-3">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#D9CCF5]" /> Engineered for Excellence
           </div>
-          <h2 className="font-['Baskervville',serif] text-4xl sm:text-5xl text-[#1A1A1A] tracking-tight">
+          <h2 className="font-['Baskervville',serif] text-3xl sm:text-4xl md:text-5xl text-[#1A1A1A] tracking-tight">
             Why Professionals Choose <span className="text-[#8A8A8A]">AI Video Agent</span>
           </h2>
-          <p className="mt-4 text-[#1A1A1A]/80 text-base">
+          <p className="mt-3 sm:mt-4 text-[#1A1A1A]/80 text-sm sm:text-base">
             From raw voice dictation to multi-hour conference recordings, get complete clarity without taking manual notes.
           </p>
         </div>
 
         {/* Feature Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8">
           {FEATURES.map((f, idx) => {
             const Icon = f.icon;
             return (
               <div
                 key={idx}
-                className="p-8 rounded-3xl border border-[#1A1A1A]/15 bg-white shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all group"
+                className="p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-[#1A1A1A]/15 bg-white shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all group"
               >
                 <div className="w-12 h-12 rounded-2xl bg-[#D9CCF5] text-[#1A1A1A] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                   <Icon className="w-6 h-6" />
