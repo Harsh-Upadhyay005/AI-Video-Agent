@@ -118,229 +118,241 @@ function AudioVideoAnalyzer({ onAnalysisComplete }: AudioVideoAnalyzerProps) {
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
-    <div className="w-full">
-      <div className="space-y-6">
-          {/* Input Mode Selector */}
-          <div className="flex justify-center gap-3 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setInputMode('url');
-                setSelectedFile(null);
-                setError(null);
-              }}
-              disabled={loading}
-              className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-                inputMode === 'url'
-                  ? 'bg-[#1A1A1A] text-white'
-                  : 'bg-[#FDFCF0] border-2 border-[#1A1A1A]/15 text-[#1A1A1A] hover:border-[#1A1A1A]/40'
-              }`}
-            >
-              <Youtube className="w-4 h-4" />
-              YouTube URL
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setInputMode('file');
-                setUrl('');
-                setError(null);
-              }}
-              disabled={loading}
-              className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-                inputMode === 'file'
-                  ? 'bg-[#1A1A1A] text-white'
-                  : 'bg-[#FDFCF0] border-2 border-[#1A1A1A]/15 text-[#1A1A1A] hover:border-[#1A1A1A]/40'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              Upload File
-            </button>
-          </div>
+    <div id="studio" className="space-y-6 sm:space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h2 className="font-['Baskervville',serif] text-2xl sm:text-3xl md:text-4xl text-[#1A1A1A] mb-2">
+          Audio / Video Analysis
+        </h2>
+        <p className="text-xs sm:text-sm text-[#8A8A8A] max-w-xl mx-auto">
+          Paste a YouTube link or upload any audio/video file for AI transcription, executive takeaways, and vector search.
+        </p>
+      </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {inputMode === 'url' ? (
-              <div className="space-y-2">
-                <label htmlFor="url" className="block text-sm font-semibold text-[#1A1A1A]">
-                  YouTube URL
-                </label>
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Mode Switcher */}
+        <div className="flex flex-col sm:flex-row justify-center gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setInputMode('url');
+              setSelectedFile(null);
+              setError(null);
+            }}
+            disabled={loading}
+            className={`flex-1 sm:flex-initial px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+              inputMode === 'url'
+                ? 'bg-[#1A1A1A] text-white shadow-sm'
+                : 'bg-[#FDFCF0] border-2 border-[#1A1A1A]/15 text-[#1A1A1A] hover:border-[#1A1A1A]/40'
+            }`}
+          >
+            <Youtube className="w-4 h-4 text-red-500" />
+            <span>YouTube URL</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInputMode('file');
+              setUrl('');
+              setError(null);
+            }}
+            disabled={loading}
+            className={`flex-1 sm:flex-initial px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+              inputMode === 'file'
+                ? 'bg-[#1A1A1A] text-white shadow-sm'
+                : 'bg-[#FDFCF0] border-2 border-[#1A1A1A]/15 text-[#1A1A1A] hover:border-[#1A1A1A]/40'
+            }`}
+          >
+            <Upload className="w-4 h-4 text-purple-500" />
+            <span>Upload File</span>
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+          {inputMode === 'url' ? (
+            <div className="space-y-2">
+              <label htmlFor="url" className="block text-xs sm:text-sm font-semibold text-[#1A1A1A]">
+                YouTube URL
+              </label>
+              <input
+                id="url"
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                disabled={loading}
+                className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-xs sm:text-sm text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] focus:border-transparent transition-all"
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-[#1A1A1A]">
+                Upload Audio or Video File
+              </label>
+              
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                className={`relative rounded-2xl border-2 border-dashed transition-all ${
+                  dragActive
+                    ? 'border-[#D9CCF5] bg-[#D9CCF5]/10'
+                    : selectedFile
+                    ? 'border-[#1A1A1A]/20 bg-[#FDFCF0]'
+                    : 'border-[#1A1A1A]/15 bg-[#FDFCF0] hover:border-[#1A1A1A]/30'
+                }`}
+              >
                 <input
-                  id="url"
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".mp3,.mp4,.wav,.m4a,.flac,.ogg,.aac,.avi,.mov,.mkv,.webm,.flv,.wmv"
+                  onChange={(e) => e.target.files?.[0] && validateAndSetFile(e.target.files[0])}
+                  className="hidden"
                   disabled={loading}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-[#1A1A1A] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] focus:border-transparent transition-all"
                 />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-[#1A1A1A]">
-                  Upload Audio or Video File
-                </label>
                 
-                <div
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  className={`relative rounded-2xl border-2 border-dashed transition-all ${
-                    dragActive
-                      ? 'border-[#D9CCF5] bg-[#D9CCF5]/10'
-                      : selectedFile
-                      ? 'border-[#1A1A1A]/20 bg-[#FDFCF0]'
-                      : 'border-[#1A1A1A]/15 bg-[#FDFCF0] hover:border-[#1A1A1A]/30'
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".mp3,.mp4,.wav,.m4a,.flac,.ogg,.aac,.avi,.mov,.mkv,.webm,.flv,.wmv"
-                    onChange={(e) => e.target.files?.[0] && validateAndSetFile(e.target.files[0])}
-                    className="hidden"
-                    disabled={loading}
-                  />
-                  
-                  {selectedFile ? (
-                    <div className="p-6 flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-[#D9CCF5]/30 flex items-center justify-center shrink-0">
-                        <FileAudio className="w-6 h-6 text-[#1A1A1A]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm text-[#1A1A1A] truncate">
-                          {selectedFile.name}
-                        </div>
-                        <div className="text-xs text-[#8A8A8A]">
-                          {formatFileSize(selectedFile.size)}
-                        </div>
-                      </div>
-                      {!loading && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedFile(null)}
-                          className="w-8 h-8 rounded-lg bg-[#1A1A1A]/10 hover:bg-[#1A1A1A]/20 flex items-center justify-center transition-colors"
-                        >
-                          <X className="w-4 h-4 text-[#1A1A1A]" />
-                        </button>
-                      )}
+                {selectedFile ? (
+                  <div className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#D9CCF5]/30 flex items-center justify-center shrink-0">
+                      <FileAudio className="w-5 h-5 sm:w-6 sm:h-6 text-[#1A1A1A]" />
                     </div>
-                  ) : (
-                    <div className="p-8 text-center space-y-4">
-                      <div className="w-16 h-16 mx-auto rounded-full bg-[#D9CCF5]/20 flex items-center justify-center">
-                        <Upload className="w-8 h-8 text-[#1A1A1A]" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-xs sm:text-sm text-[#1A1A1A] truncate">
+                        {selectedFile.name}
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-[#1A1A1A] mb-1">
-                          Drag and drop your file here
-                        </p>
-                        <p className="text-xs text-[#8A8A8A]">or</p>
+                      <div className="text-[11px] sm:text-xs text-[#8A8A8A]">
+                        {formatFileSize(selectedFile.size)}
                       </div>
+                    </div>
+                    {!loading && (
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={loading}
-                        className="px-6 py-2 rounded-xl bg-[#1A1A1A] text-white text-sm font-semibold hover:bg-black transition-all"
+                        onClick={() => setSelectedFile(null)}
+                        className="w-8 h-8 rounded-lg bg-[#1A1A1A]/10 hover:bg-[#1A1A1A]/20 flex items-center justify-center transition-colors shrink-0"
                       >
-                        Browse Files
+                        <X className="w-4 h-4 text-[#1A1A1A]" />
                       </button>
-                      <p className="text-xs text-[#8A8A8A]">
-                        <strong>Audio:</strong> MP3, WAV, M4A, FLAC, OGG, AAC
-                        <br />
-                        <strong>Video:</strong> MP4, AVI, MOV, MKV, WebM, FLV, WMV
-                        <br />
-                        Max size: 500MB
-                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-5 sm:p-8 text-center space-y-3 sm:space-y-4">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-full bg-[#D9CCF5]/20 flex items-center justify-center">
+                      <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-[#1A1A1A]" />
                     </div>
-                  )}
-                </div>
+                    <div>
+                      <p className="text-xs sm:text-sm font-semibold text-[#1A1A1A] mb-1">
+                        Drag and drop your file here
+                      </p>
+                      <p className="text-[11px] sm:text-xs text-[#8A8A8A]">or</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={loading}
+                      className="px-5 sm:px-6 py-2 rounded-xl bg-[#1A1A1A] text-white text-xs sm:text-sm font-semibold hover:bg-black transition-all"
+                    >
+                      Browse Files
+                    </button>
+                    <p className="text-[10px] sm:text-xs text-[#8A8A8A] leading-relaxed">
+                      <strong>Audio:</strong> MP3, WAV, M4A, FLAC, OGG, AAC
+                      <br />
+                      <strong>Video:</strong> MP4, AVI, MOV, MKV, WebM, FLV, WMV
+                      <br />
+                      Max size: 500MB
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Language Selector */}
-            <div className="space-y-2">
-              <label htmlFor="language" className="block text-sm font-semibold text-[#1A1A1A]">
-                Language
-              </label>
-              <select
-                id="language"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as Language)}
-                disabled={loading}
-                className="w-full px-4 py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] focus:border-transparent transition-all"
-              >
-                <option value="english">English</option>
-                <option value="hinglish">Hinglish</option>
-              </select>
             </div>
+          )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading || (inputMode === 'url' && !url.trim()) || (inputMode === 'file' && !selectedFile)}
-              className="w-full px-6 py-4 rounded-xl bg-[#1A1A1A] text-white font-semibold hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+          {/* Language Selector */}
+          <div className="space-y-2">
+            <label htmlFor="language" className="block text-xs sm:text-sm font-semibold text-[#1A1A1A]">
+              Language
+            </label>
+            <select
+              id="language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              disabled={loading}
+              className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl border-2 border-[#1A1A1A]/15 bg-[#FDFCF0] text-xs sm:text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#D9CCF5] focus:border-transparent transition-all"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
+              <option value="english">English</option>
+              <option value="hinglish">Hinglish</option>
+            </select>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading || (inputMode === 'url' && !url.trim()) || (inputMode === 'file' && !selectedFile)}
+            className="w-full px-6 py-3.5 sm:py-4 rounded-xl bg-[#1A1A1A] text-white font-semibold text-xs sm:text-sm hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg active:scale-[0.99]"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                <span>
                   {uploadProgress > 0 && uploadProgress < 100
                     ? `Uploading... ${uploadProgress}%`
                     : 'Processing...'}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  {inputMode === 'url' ? 'Analyze Video' : 'Analyze Media'}
-                </>
-              )}
-            </button>
-          </form>
+                </span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>{inputMode === 'url' ? 'Analyze Video' : 'Analyze Media'}</span>
+              </>
+            )}
+          </button>
+        </form>
 
-          {/* Loading State */}
-          {loading && (
-            <div className="bg-[#D9CCF5]/20 rounded-2xl border border-[#D9CCF5]/40 p-6 text-center space-y-3">
-              <div className="flex justify-center">
-                <div className="w-12 h-12 rounded-full bg-[#1A1A1A] flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-[#D9CCF5] animate-spin" />
-                </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="bg-[#D9CCF5]/20 rounded-2xl border border-[#D9CCF5]/40 p-4 sm:p-6 text-center space-y-3">
+            <div className="flex justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#1A1A1A] flex items-center justify-center">
+                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-[#D9CCF5] animate-spin" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-[#1A1A1A]">
-                  {uploadProgress > 0 && uploadProgress < 100
-                    ? `Uploading file... ${uploadProgress}%`
-                    : `Processing ${inputMode === 'url' ? 'video' : 'media'}...`}
-                </p>
-                <p className="text-xs text-[#8A8A8A] mt-1">
-                  This may take 2-10 minutes. We're {inputMode === 'url' && 'downloading, '}
-                  transcribing audio, and creating a searchable index.
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-[#1A1A1A]">
+                {uploadProgress > 0 && uploadProgress < 100
+                  ? `Uploading file... ${uploadProgress}%`
+                  : `Processing ${inputMode === 'url' ? 'video' : 'media'}...`}
+              </p>
+              <p className="text-[11px] sm:text-xs text-[#8A8A8A] mt-1 max-w-md mx-auto">
+                This may take 2-10 minutes. We're {inputMode === 'url' && 'downloading, '}
+                transcribing audio, and creating a searchable index.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 rounded-2xl border-2 border-red-200 p-4 sm:p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs sm:text-sm font-bold text-red-900 mb-0.5">Error</h3>
+                <p className="text-xs sm:text-sm text-red-700 break-words">{error}</p>
+                <p className="text-[11px] sm:text-xs text-red-600 mt-1.5">
+                  Make sure the backend is running and the {inputMode === 'url' ? 'URL is valid' : 'file format is supported'}.
                 </p>
               </div>
             </div>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <div className="bg-red-50 rounded-2xl border-2 border-red-200 p-6">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-5 h-5 text-red-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-bold text-red-900 mb-1">Error</h3>
-                  <p className="text-sm text-red-700">{error}</p>
-                  <p className="text-xs text-red-600 mt-2">
-                    Make sure the backend is running and the {inputMode === 'url' ? 'URL is valid' : 'file format is supported'}.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

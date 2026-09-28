@@ -89,42 +89,45 @@ function App() {
           </div>
         ) : (
           <ProtectedRoute onBackToHome={() => setActiveView('home')}>
-            <div className="pt-20 bg-[#FDFCF0] min-h-screen flex flex-col animate-fade-in">
+            <div className="pt-16 sm:pt-20 bg-[#FDFCF0] min-h-screen flex flex-col animate-fade-in">
 
-            <div className="flex-1 pb-16">
-              <section className="py-8 px-4 sm:px-6">
+            <div className="flex-1 pb-12 sm:pb-16">
+              <section className="py-6 sm:py-8 px-3 sm:px-6">
                 <div className="max-w-6xl mx-auto">
-                  <div className="flex justify-center gap-4 mb-8">
+                  {/* Analyzer Tabs */}
+                  <div className="flex flex-col sm:flex-row justify-center gap-2.5 sm:gap-4 mb-6 sm:mb-8 max-w-md sm:max-w-none mx-auto">
                     <button
                       onClick={() => {
                         setAnalyzerType('audio-video');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
+                      className={`w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 ${
                         analyzerType === 'audio-video'
-                          ? 'bg-[#1A1A1A] text-white shadow-lg'
+                          ? 'bg-[#1A1A1A] text-white shadow-md'
                           : 'bg-white border-2 border-[#1A1A1A]/20 text-[#1A1A1A] hover:border-[#1A1A1A]'
                       }`}
                     >
-                      🎬 Audio / Video / YouTube
+                      <span>🎬</span>
+                      <span>Audio / Video / YouTube</span>
                     </button>
                     <button
                       onClick={() => {
                         setAnalyzerType('pdf');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
+                      className={`w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 ${
                         analyzerType === 'pdf'
-                          ? 'bg-[#1A1A1A] text-white shadow-lg'
+                          ? 'bg-[#1A1A1A] text-white shadow-md'
                           : 'bg-white border-2 border-[#1A1A1A]/20 text-[#1A1A1A] hover:border-[#1A1A1A]'
                       }`}
                     >
-                      📄 PDF Documents
+                      <span>📄</span>
+                      <span>PDF Documents</span>
                     </button>
                   </div>
 
                   <ErrorBoundary>
-                    <div className="bg-white rounded-3xl border-2 border-[#1A1A1A] shadow-xl p-6">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl border-2 border-[#1A1A1A] shadow-xl p-4 sm:p-6 md:p-8">
                       {analyzerType === 'audio-video' ? (
                         <AudioVideoAnalyzer
                           onAnalysisComplete={handleAnalysisReady}
