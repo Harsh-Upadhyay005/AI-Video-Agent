@@ -19,6 +19,9 @@ export default {
       fontFamily: {
         serif: ["Baskervville", "Georgia", "serif"],
         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+      },
+      screens: {
+        xs: "420px",
       }
     },
   },
