@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
-import { MessageSquare, Send, Bot, User, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import type React from "react";
+import { MessageSquare, Send, Bot, User, RefreshCw, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AnalysisData, Message } from "../types/analysis";

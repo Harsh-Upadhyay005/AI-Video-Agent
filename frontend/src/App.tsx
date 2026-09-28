@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './index.css';
 import { Header } from './components/Header';
 import { WisprHero } from './components/WisprHero';
@@ -17,7 +17,7 @@ type AnalyzerType = 'audio-video' | 'pdf';
 
 function App() {
   const [activeView, setActiveView] = useState<ViewType>('home');
-  const [studioUrl, setStudioUrl] = useState<string>('');
+  const [, setStudioUrl] = useState<string>('');
   const [currentAnalysis, setCurrentAnalysis] = useState<AnalysisData | null>(null);
   const [analyzerType, setAnalyzerType] = useState<AnalyzerType>('audio-video');
 
@@ -49,16 +49,16 @@ function App() {
   };
 
   const handleAnalysisReady = (result: AnalysisData) => {
-    const currentScrollY = window.scrollY;
     setCurrentAnalysis(result);
     try {
       localStorage.setItem('lastStudioAnalysis', JSON.stringify(result));
     } catch (e) {
       console.error('Failed to cache analysis to localStorage:', e);
     }
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: currentScrollY, behavior: 'instant' });
-    });
+    setTimeout(() => {
+      const chatEl = document.getElementById('chat');
+      chatEl?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   return (
@@ -88,7 +88,7 @@ function App() {
             }} />
           </div>
         ) : (
-          <ProtectedRoute>
+          <ProtectedRoute onBackToHome={() => setActiveView('home')}>
             <div className="pt-20 bg-[#FDFCF0] min-h-screen flex flex-col animate-fade-in">
 
             <div className="flex-1 pb-16">
