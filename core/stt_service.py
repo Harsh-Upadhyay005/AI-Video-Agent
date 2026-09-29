@@ -42,8 +42,9 @@ class STTProvider(Protocol):
 
 class WhisperSTTProvider:
     """
-    Whisper-based STT provider (local, open-source).
-    Uses OpenAI's Whisper model running locally.
+    Whisper-based STT provider (local, high performance).
+    Uses faster-whisper (CTranslate2) with int8 quantization and VAD filtering,
+    falling back to OpenAI's Whisper if faster-whisper is unavailable.
     """
     
     def __init__(self, model: str = "small"):
@@ -54,32 +55,70 @@ class WhisperSTTProvider:
             model: Whisper model size (tiny, base, small, medium, large)
         """
         self.model = model
-        self._whisper = None
+        self._faster_model = None
+        self._legacy_whisper = None
+        self._engine = None
         logger.info(f"[WhisperSTT] Initialized with model: {model}")
     
-    def _load_whisper(self):
-        """Lazy load Whisper model."""
-        if self._whisper is None:
+    def _load_model(self):
+        """Lazy load high-performance faster-whisper or fallback model."""
+        if self._faster_model is not None or self._legacy_whisper is not None:
+            return
+            
+        device = os.getenv("WHISPER_DEVICE", "auto").lower()
+        if device == "auto":
             try:
-                import whisper
-                logger.info(f"[WhisperSTT] Loading Whisper model: {self.model}")
-                self._whisper = whisper.load_model(self.model)
-                logger.info("[WhisperSTT] Model loaded successfully")
-            except ImportError:
-                raise ImportError(
-                    "Whisper not installed. Install with: pip install openai-whisper"
-                )
-            except Exception as e:
-                raise Exception(f"Failed to load Whisper model: {e}")
-        return self._whisper
+                import torch
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+            except Exception:
+                device = "cpu"
+        
+        compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8") if device == "cpu" else "float16"
+        threads = min(4, os.cpu_count() or 4)
+
+        # 1. Try faster-whisper (4x-8x faster CTranslate2 engine)
+        try:
+            from faster_whisper import WhisperModel
+            logger.info(
+                f"[WhisperSTT] Loading faster-whisper model: {self.model} "
+                f"(device={device}, compute_type={compute_type}, threads={threads})"
+            )
+            self._faster_model = WhisperModel(
+                self.model,
+                device=device,
+                compute_type=compute_type,
+                cpu_threads=threads
+            )
+            self._engine = "faster-whisper"
+            logger.info("[WhisperSTT] faster-whisper model loaded successfully")
+            return
+        except ImportError:
+            logger.warning("[WhisperSTT] faster-whisper not installed; falling back to openai-whisper")
+        except Exception as e:
+            logger.warning(f"[WhisperSTT] faster-whisper initialization failed: {e}; falling back to openai-whisper")
+
+        # 2. Fallback to standard OpenAI Whisper
+        try:
+            import whisper
+            logger.info(f"[WhisperSTT] Loading standard Whisper model: {self.model} on {device}")
+            self._legacy_whisper = whisper.load_model(self.model, device=device)
+            self._engine = "whisper"
+            logger.info("[WhisperSTT] Standard Whisper model loaded successfully")
+        except ImportError:
+            raise ImportError(
+                "Neither faster-whisper nor openai-whisper is installed. "
+                "Install with: pip install faster-whisper"
+            )
+        except Exception as e:
+            raise Exception(f"Failed to load Whisper model: {e}")
     
     def transcribe(self, audio_path: str, language: str = "english") -> str:
         """
-        Transcribe audio using Whisper.
+        Transcribe audio using the fastest available Whisper engine.
         
         Args:
             audio_path: Path to audio file
-            language: Language code (ignored for Whisper, auto-detects)
+            language: Language code ('english', 'hinglish', or auto-detect)
             
         Returns:
             Transcribed text
@@ -88,14 +127,30 @@ class WhisperSTTProvider:
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
         
         logger.info(f"[WhisperSTT] Transcribing: {Path(audio_path).name}")
+        self._load_model()
         
-        model = self._load_whisper()
-        
+        lang_code = "en" if language.lower() == "english" else None
+
         try:
-            result = model.transcribe(audio_path)
-            text = result["text"].strip()
+            if self._engine == "faster-whisper" and self._faster_model is not None:
+                # Use faster-whisper with VAD filter to strip silent audio chunks
+                segments, info = self._faster_model.transcribe(
+                    audio_path,
+                    beam_size=1,  # Greedy decoding: 2x faster with minimal accuracy change
+                    vad_filter=True,  # Filter out silence before transcription
+                    vad_parameters=dict(min_silence_duration_ms=500),
+                    language=lang_code
+                )
+                text = " ".join(seg.text for seg in segments).strip()
+            else:
+                # Legacy openai-whisper
+                options = {"fp16": False} if getattr(self._legacy_whisper, "device", None) == "cpu" else {}
+                if lang_code:
+                    options["language"] = lang_code
+                result = self._legacy_whisper.transcribe(audio_path, **options)
+                text = result["text"].strip()
             
-            logger.info(f"[WhisperSTT] Transcribed {len(text)} characters")
+            logger.info(f"[WhisperSTT] Transcribed {len(text)} characters ({self._engine})")
             return text
             
         except Exception as e:
@@ -273,8 +328,13 @@ class STTService:
         Returns:
             Combined transcript
         """
+        if not audio_paths:
+            return ""
+            
+        if len(audio_paths) == 1:
+            return self.transcribe(audio_paths[0], language, progress_callback)
+
         logger.info(f"[STTService] Transcribing {len(audio_paths)} audio chunks")
-        
         transcripts = []
         
         for i, audio_path in enumerate(audio_paths):
@@ -286,15 +346,13 @@ class STTService:
             
             try:
                 text = self.transcribe(audio_path, language, progress_callback=None)
-                transcripts.append(text)
-                
+                if text:
+                    transcripts.append(text)
             except Exception as e:
                 logger.error(f"[STTService] Failed to transcribe chunk {i+1}: {e}")
-                # Continue with other chunks
                 continue
         
         combined_transcript = "\n\n".join(transcripts)
-        
         logger.info(f"[STTService] Combined transcript: {len(combined_transcript)} characters")
         
         if progress_callback:

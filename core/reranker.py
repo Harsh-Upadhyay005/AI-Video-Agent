@@ -110,8 +110,8 @@ def get_reranked_retriever(
     try:
         from langchain.retrievers import ContextualCompressionRetriever
         
-        # Get cross-encoder reranker
-        reranker = get_cross_encoder_reranker(
+        # Get cached cross-encoder reranker
+        reranker = get_cached_reranker(
             model_name=model_name,
             top_n=top_n
         )

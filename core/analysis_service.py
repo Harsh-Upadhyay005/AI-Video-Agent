@@ -248,7 +248,7 @@ class AnalysisService:
         top_k: int = 20
     ) -> Dict[str, Any]:
         """
-        Perform multiple analyses in sequence.
+        Perform multiple analyses concurrently.
         
         Args:
             vector_store: Vector store with indexed content
@@ -258,20 +258,27 @@ class AnalysisService:
         Returns:
             Dict mapping analysis type to result
         """
-        logger.info(f"[AnalysisService] Batch analysis: {len(analysis_types)} types")
+        from concurrent.futures import ThreadPoolExecutor
+        
+        logger.info(f"[AnalysisService] Concurrent batch analysis: {len(analysis_types)} types")
         
         results = {}
+        max_workers = min(4, len(analysis_types)) if analysis_types else 1
         
-        for analysis_type in analysis_types:
-            result = self.analyze(
-                vector_store=vector_store,
-                analysis_type=analysis_type,
-                top_k=top_k
-            )
-            results[analysis_type.value] = result
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_type = {
+                executor.submit(self.analyze, vector_store, atype, top_k): atype
+                for atype in analysis_types
+            }
+            for future in future_to_type:
+                atype = future_to_type[future]
+                try:
+                    results[atype.value] = future.result()
+                except Exception as e:
+                    logger.error(f"[AnalysisService] Batch item {atype.value} failed: {e}")
+                    results[atype.value] = {"success": False, "error": str(e), "result": ""}
         
         logger.info("[AnalysisService]   Batch analysis complete")
-        
         return results
 
 
