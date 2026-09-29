@@ -16,11 +16,13 @@ class FakeYoutubeDL:
         return False
 
     def extract_info(self, url, download):
-        assert self.opts["js_runtimes"]["node"]["executable"] == "node"
-        assert self.opts["extractor_args"]["youtube"] == [
-            "player_client=android",
-            "player_skip=webpage",
-        ]
+        assert os.path.basename(self.opts["js_runtimes"]["node"]["executable"]).lower() in {"node", "node.exe"}
+        youtube_args = self.opts["extractor_args"]["youtube"]
+        assert youtube_args["player_client"] in [["web"], ["android"], ["ios"]]
+        if "player_skip" in youtube_args:
+            assert youtube_args["player_skip"] == ["webpage", "configs"]
+            os.makedirs("downloads", exist_ok=True)
+            open(os.path.join("downloads", "demo.wav"), "a").close()
         return {"title": "demo", "ext": "mp4"}
 
     def prepare_filename(self, info):

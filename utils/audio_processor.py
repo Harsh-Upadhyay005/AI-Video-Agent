@@ -11,7 +11,7 @@ from core.logger import get_logger
 
 logger = get_logger(__name__)
 
-DOWNLOAD_DIR = "downloads"
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
@@ -30,10 +30,12 @@ def _find_browser_executable(browser_name: str) -> Optional[str]:
         "edge": [
             Path(os.environ.get("PROGRAMFILES", "C:\\Program Files")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
             Path(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
         ],
         "firefox": [
             Path(os.environ.get("PROGRAMFILES", "C:\\Program Files")) / "Mozilla Firefox" / "firefox.exe",
             Path(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")) / "Mozilla Firefox" / "firefox.exe",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Mozilla Firefox" / "firefox.exe",
         ],
         "brave": [
             Path(os.environ.get("PROGRAMFILES", "C:\\Program Files")) / "BraveSoftware" / "Brave-Browser" / "Application" / "brave.exe",
@@ -46,6 +48,10 @@ def _find_browser_executable(browser_name: str) -> Optional[str]:
             Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Opera" / "opera.exe",
         ],
     }
+
+    executable = shutil.which(browser_name)
+    if executable:
+        return executable
     
     # Check each path for this browser
     for path in browser_paths.get(browser_name.lower(), []):
@@ -63,7 +69,12 @@ def _build_yt_dlp_options(output_path: str, node_path: str, client: str = "andro
     YouTube now REQUIRES browser cookies (OAuth is deprecated).
     This function extracts cookies from installed browsers automatically.
     """
-    # Try to extract cookies from browsers - THIS IS NOW REQUIRED, NOT OPTIONAL
+    cookie_file = os.getenv("YOUTUBE_COOKIES_FILE")
+    if cookie_file and not Path(cookie_file).is_file():
+        logger.warning("YOUTUBE_COOKIES_FILE does not exist: %s", cookie_file)
+        cookie_file = None
+
+    # Try to extract cookies from browsers when no cookie file was supplied.
     # Priority order: Chrome > Edge > Firefox > Brave > Opera
     cookiesfrombrowser = None
     available_browsers = []
@@ -144,7 +155,10 @@ def _build_yt_dlp_options(output_path: str, node_path: str, client: str = "andro
     }
     
     # Add browser cookies - CRITICAL for YouTube
-    if cookiesfrombrowser:
+    if cookie_file:
+        options["cookiefile"] = cookie_file
+        logger.info("  Using YouTube cookies from %s", cookie_file)
+    elif cookiesfrombrowser:
         browser_name, display_name = cookiesfrombrowser
         options["cookiesfrombrowser"] = (browser_name,)
         logger.info(f"  Using cookies from {display_name}")
@@ -190,6 +204,10 @@ def download_youtube_audio(url: str) -> str:
     node_path = shutil.which("node") or "node"
     last_error = None
     download_errors = []
+    cookie_file = os.getenv("YOUTUBE_COOKIES_FILE")
+    if cookie_file and not Path(cookie_file).is_file():
+        download_errors.append(f"Configured cookie file not found: {cookie_file}")
+        cookie_file = None
     
     # STRATEGY 1: Try WITHOUT cookies first (works for most public videos)
     logger.info("[YouTubeDownload] Strategy 1: Attempting download without cookies...")
@@ -231,6 +249,8 @@ def download_youtube_audio(url: str) -> str:
                 "retries": 2,
                 "fragment_retries": 2,
             }
+            if cookie_file:
+                options["cookiefile"] = cookie_file
             
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -265,7 +285,7 @@ def download_youtube_audio(url: str) -> str:
     # STRATEGY 2: Try WITH browser cookies if strategy 1 failed
     logger.info("[YouTubeDownload] Strategy 2: Attempting download with browser cookies...")
     
-    # Find available browsers
+    # Find available browsers or use an explicitly supplied cookie file.
     available_browsers = []
     browser_candidates = [
         ("edge", "Edge"),       # Try Edge first (usually not running)
@@ -279,14 +299,14 @@ def download_youtube_audio(url: str) -> str:
             available_browsers.append((browser_name, display_name))
             logger.info(f"[YouTubeDownload]   Found browser: {display_name}")
     
-    if not available_browsers:
+    if not available_browsers and not cookie_file:
         # No browsers found - return clear error
         error_msg = (
             "YouTube download failed and no browsers are available for authentication.\n\n"
             "The video may require login. To fix:\n"
-            "1. Install Chrome, Edge, or Firefox\n"
-            "2. Login to YouTube in that browser\n"
-            "3. Try the download again\n\n"
+            "1. Install Chrome, Edge, or Firefox and login to YouTube\n"
+            "2. Close the browser and try the download again\n"
+            "   (or set YOUTUBE_COOKIES_FILE to a Netscape cookies.txt file)\n\n"
             "Alternatively: Download the video manually and upload the file."
         )
         logger.error(f"[YouTubeDownload] {error_msg}")
@@ -294,8 +314,10 @@ def download_youtube_audio(url: str) -> str:
             logger.error(f"[YouTubeDownload] Previous errors: {'; '.join(download_errors)}")
         raise RuntimeError(error_msg)
     
-    # Try each browser
-    for browser_name, display_name in available_browsers:
+    cookie_sources = [(None, "cookie file")] if cookie_file else available_browsers
+
+    # Try each configured cookie source.
+    for browser_name, display_name in cookie_sources:
         try:
             logger.info(f"[YouTubeDownload]   Trying with {display_name} cookies...")
             
@@ -307,7 +329,6 @@ def download_youtube_audio(url: str) -> str:
                 "noplaylist": True,
                 "quiet": True,
                 "no_warnings": True,
-                "cookiesfrombrowser": (browser_name,),  # Extract cookies
                 "js_runtimes": {"node": {"executable": node_path}},
                 "extractor_args": {
                     "youtube": {
@@ -326,6 +347,10 @@ def download_youtube_audio(url: str) -> str:
                 "retries": 2,
                 "fragment_retries": 2,
             }
+            if cookie_file:
+                options["cookiefile"] = cookie_file
+            else:
+                options["cookiesfrombrowser"] = (browser_name,)
             
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -361,7 +386,7 @@ def download_youtube_audio(url: str) -> str:
     # All strategies failed - provide helpful error message
     error_summary = "\n".join(f"  • {err}" for err in download_errors[-5:])  # Last 5 errors
     
-    browser_list = ", ".join(name for _, name in available_browsers)
+    browser_list = ", ".join(name for _, name in available_browsers) or "none"
     
     error_msg = (
         f"YouTube download failed after trying multiple strategies.\n\n"

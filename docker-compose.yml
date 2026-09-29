@@ -26,6 +26,8 @@ services:
       
       # Audio processing
       - DOWNLOAD_DIR=/app/downloads
+      # Optional: use a Netscape-format cookies.txt file for restricted videos
+      # - YOUTUBE_COOKIES_FILE=/app/config/youtube-cookies.txt
       - CHUNK_MINUTES=10
       
       # Whisper settings
@@ -46,6 +48,8 @@ services:
       - ./vector_db:/app/vector_db
       
       # Optional: Mount custom config
+      # - ./config:/app/config:ro
+      # For authenticated YouTube downloads, place cookies.txt in ./config and enable:
       # - ./config:/app/config:ro
     
     # Resource limits (adjust based on your needs)
@@ -136,6 +140,5 @@ networks:
     driver: bridge
 
 volumes:
-  # Uncomment if using optional services
-  # redis-data:
-  # postgres-data:
+  # Reserved for optional named services such as Redis or PostgreSQL.
+  {}
