@@ -84,7 +84,7 @@ class APIClient {
       
       // Handle network errors
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        const networkError = new Error('Cannot connect to backend. Make sure backend is running on http://localhost:8000');
+        const networkError = new Error(`Cannot connect to backend. Make sure backend is running on ${this.baseURL}`);
         networkError.isNetworkError = true;
         throw networkError;
       }
@@ -162,7 +162,7 @@ class APIClient {
       return this.normalizeAnalysisResult(data);
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Cannot connect to backend. Make sure backend is running on http://localhost:8000');
+        throw new Error(`Cannot connect to backend. Make sure backend is running on ${this.baseURL}`);
       }
       console.error('Upload Error:', error.message);
       throw error;

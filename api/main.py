@@ -113,9 +113,9 @@ app = FastAPI(
 )
 
 
-# =============================================================================
+  
 # Middleware Configuration
-# =============================================================================
+  
 
 _CORS_ORIGINS, _CORS_CREDENTIALS = _cors_settings()
 app.add_middleware(
@@ -165,9 +165,9 @@ async def log_requests(request: Request, call_next):
         raise
 
 
-# =============================================================================
+  
 # Exception Handlers
-# =============================================================================
+  
 
 @app.exception_handler(AIVideoAgentException)
 async def custom_exception_handler(request: Request, exc: AIVideoAgentException):
@@ -208,9 +208,9 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# =============================================================================
+  
 # Include Routers
-# =============================================================================
+  
 
 # Include health routes at multiple paths for compatibility
 app.include_router(health.router, tags=["Health"])  # /health (root level)
@@ -221,9 +221,9 @@ app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(account.router, prefix="/api/v1", tags=["Account"])
 
 
-# =============================================================================
+  
 # Root Endpoint
-# =============================================================================
+  
 
 @app.get("/")
 async def root():
@@ -237,9 +237,9 @@ async def root():
     }
 
 
-# =============================================================================
+  
 # Main Entry Point
-# =============================================================================
+  
 
 if __name__ == "__main__":
     # Run the application

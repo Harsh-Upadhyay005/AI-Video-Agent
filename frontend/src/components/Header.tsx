@@ -3,6 +3,8 @@ import type React from 'react';
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import { isClerkConfigured } from '../lib/clerk';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 interface HeaderProps {
   onNavigateToStudio: () => void;
   onNavigateToHome: () => void;
@@ -61,11 +63,11 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const checkBackend = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/health/ping', { method: 'GET' });
+        const res = await fetch(`${API_BASE_URL}/api/health/ping`, { method: 'GET' });
         setBackendOnline(res.ok);
       } catch {
         try {
-          const res2 = await fetch('http://localhost:8000/docs');
+          const res2 = await fetch(`${API_BASE_URL}/docs`);
           setBackendOnline(res2.ok);
         } catch {
           setBackendOnline(false);

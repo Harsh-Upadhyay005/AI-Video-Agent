@@ -1,6 +1,8 @@
 import type React from "react";
 import { Video, ExternalLink, Sparkles } from "lucide-react";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 interface FooterProps {
   onNavigateToStudio?: () => void;
 }
@@ -89,7 +91,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToStudio }) => {
             <a href="#playground" className="hover:text-white transition-colors">Dictation Lab</a>
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a
-              href="http://localhost:8000/docs"
+              href={`${API_BASE_URL}/docs`}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-[#D9CCF5] transition-colors flex items-center gap-1"

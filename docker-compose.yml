@@ -1,10 +1,10 @@
 
 
-# =============================================================================
+  
 # AI Video Agent - Docker Compose Configuration
-# =============================================================================
+  
 # Orchestrates the AI Video Agent application with all its dependencies
-# =============================================================================
+  
 
 services:
   # Main application service
