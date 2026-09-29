@@ -25,13 +25,11 @@ class HealthResponse(BaseModel):
 @router.get("/health", response_model=Dict[str, Any])
 async def health_check():
     """
-    Basic health check endpoint.
-    Returns 200 if service is running.
+    Lightweight public health endpoint for uptime monitoring.
     """
     return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "AI Video Agent API"
+        "status": "ok",
+        "service": "ai-video-agent"
     }
 
 
