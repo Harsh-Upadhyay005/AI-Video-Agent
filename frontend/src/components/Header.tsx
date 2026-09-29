@@ -63,15 +63,10 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const checkBackend = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/health/ping`, { method: 'GET' });
+        const res = await fetch(`${API_BASE_URL}/health`, { method: 'GET' });
         setBackendOnline(res.ok);
       } catch {
-        try {
-          const res2 = await fetch(`${API_BASE_URL}/docs`);
-          setBackendOnline(res2.ok);
-        } catch {
-          setBackendOnline(false);
-        }
+        setBackendOnline(false);
       }
     };
     checkBackend();
