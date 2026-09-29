@@ -3,13 +3,17 @@ FastAPI main application for AI Video Agent.
 Production-ready API with proper error handling, logging, and monitoring.
 """
 
+import os
+# Prevent OpenMP runtime conflict and tokenizer deadlocks on Windows/multi-threaded servers
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Optional, List, Tuple
-import os
 import time
 import uvicorn
 

@@ -405,11 +405,11 @@ async def upload_and_analyze(
         # Get file manager
         file_manager = get_file_manager()
         
-        # Save and validate uploaded file (with Supabase integration)
+        # Save and validate uploaded file (fast local storage, non-blocking)
         job_id, file_path, file_size, supabase_info = await file_manager.save_upload(
             file=file,
             language=validated_language,
-            upload_to_supabase=True  # Enable Supabase upload
+            upload_to_supabase=False  # Do not block upload endpoint on cloud storage
         )
         
         logger.info(
