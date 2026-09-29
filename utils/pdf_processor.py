@@ -1,69 +1,71 @@
 """
 PDF Document Processing for AI Video Agent.
 Extracts text from PDF documents for RAG-based Q&A.
+High performance: supports modern pypdf with fallback to PyPDF2, single-pass extraction.
 """
 
 import os
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Tuple
 
+# Try modern pypdf first, then PyPDF2
+PDF_BACKEND = None
 try:
-    import PyPDF2
-    PYPDF2_AVAILABLE = True
+    import pypdf
+    PDF_BACKEND = pypdf
 except ImportError:
-    PYPDF2_AVAILABLE = False
-    print("[PDFProcessor] Warning: PyPDF2 not installed. PDF support disabled.")
+    try:
+        import PyPDF2
+        PDF_BACKEND = PyPDF2
+    except ImportError:
+        PDF_BACKEND = None
 
 
 def extract_text_from_pdf(
     pdf_path: str,
     progress_callback: Optional[Callable[[str, str], None]] = None
-) -> str:
+) -> Tuple[str, int]:
     """
-    Extract text content from a PDF file.
+    Extract text content from a PDF file in a single fast pass.
     
     Args:
         pdf_path: Path to the PDF file
         progress_callback: Optional callback(stage, message) for progress updates
         
     Returns:
-        Extracted text content
+        Tuple of (extracted text content, total page count)
         
     Raises:
-        ImportError: If PyPDF2 is not installed
+        ImportError: If neither pypdf nor PyPDF2 is installed
         FileNotFoundError: If PDF file doesn't exist
         Exception: For other PDF processing errors
     """
-    if not PYPDF2_AVAILABLE:
+    if PDF_BACKEND is None:
         raise ImportError(
-            "PyPDF2 is required for PDF processing. "
-            "Install it with: pip install PyPDF2"
+            "pypdf or PyPDF2 is required for PDF processing. "
+            "Install with: pip install pypdf"
         )
     
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
     
+    file_name = os.path.basename(pdf_path)
     if progress_callback:
-        progress_callback("pdf_extraction", f"Opening PDF: {os.path.basename(pdf_path)}")
-    
-    print(f"[PDFProcessor] Extracting text from: {pdf_path}")
+        progress_callback("pdf_extraction", f"Opening PDF: {file_name}")
     
     try:
-        # Open PDF file
         with open(pdf_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = PDF_BACKEND.PdfReader(file)
             num_pages = len(pdf_reader.pages)
-            
-            print(f"[PDFProcessor] PDF has {num_pages} pages")
             
             if progress_callback:
                 progress_callback("pdf_extraction", f"Processing {num_pages} pages...")
             
-            # Extract text from all pages
             text_content = []
+            report_interval = max(1, num_pages // 10)  # Report progress at 10% steps
             
             for page_num, page in enumerate(pdf_reader.pages):
-                if progress_callback:
+                if progress_callback and (page_num % report_interval == 0 or page_num == num_pages - 1):
                     progress_callback(
                         "pdf_extraction",
                         f"Extracting page {page_num + 1}/{num_pages}..."
@@ -72,41 +74,28 @@ def extract_text_from_pdf(
                 try:
                     page_text = page.extract_text()
                     if page_text and page_text.strip():
-                        # Add page marker for reference
                         text_content.append(f"[Page {page_num + 1}]\n{page_text}")
                 except Exception as e:
-                    print(f"[PDFProcessor] Warning: Failed to extract page {page_num + 1}: {e}")
                     continue
             
-            # Combine all pages
             full_text = "\n\n".join(text_content)
             
             if not full_text or not full_text.strip():
                 raise ValueError("No text content extracted from PDF. PDF might be image-based or empty.")
             
-            print(f"[PDFProcessor] Extracted {len(full_text)} characters from {num_pages} pages")
-            
             if progress_callback:
-                progress_callback("pdf_extraction", f"Successfully extracted text from {num_pages} pages")
+                progress_callback("pdf_extraction", f"Extracted text from {num_pages} pages")
             
-            return full_text
+            return full_text, num_pages
             
-    except PyPDF2.errors.PdfReadError as e:
-        raise Exception(f"Failed to read PDF file: {e}")
     except Exception as e:
+        if "empty" in str(e).lower() or "image-based" in str(e).lower():
+            raise
         raise Exception(f"PDF processing error: {e}")
 
 
 def is_pdf_file(file_path: str) -> bool:
-    """
-    Check if a file is a PDF based on extension.
-    
-    Args:
-        file_path: Path to the file
-        
-    Returns:
-        True if file is a PDF, False otherwise
-    """
+    """Check if a file is a PDF based on extension."""
     return Path(file_path).suffix.lower() == '.pdf'
 
 
@@ -127,7 +116,6 @@ def validate_pdf(file_path: str, max_size_mb: int = 500) -> tuple[bool, str]:
     if not is_pdf_file(file_path):
         return False, "File is not a PDF"
     
-    # Check file size
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
     if file_size_mb > max_size_mb:
         return False, f"PDF file too large: {file_size_mb:.1f}MB (max: {max_size_mb}MB)"
@@ -140,31 +128,22 @@ def process_pdf_document(
     progress_callback: Optional[Callable[[str, str], None]] = None
 ) -> dict:
     """
-    Process PDF document and return structured data.
+    Process PDF document in a single pass and return structured data.
     
     Args:
         pdf_path: Path to the PDF file
         progress_callback: Optional callback for progress updates
         
     Returns:
-        Dictionary with:
-            - text: Extracted text content
-            - page_count: Number of pages
-            - file_name: Original file name
-            - char_count: Character count
+        Dictionary with text, page_count, file_name, char_count
     """
     # Validate PDF
     is_valid, error_msg = validate_pdf(pdf_path)
     if not is_valid:
         raise ValueError(error_msg)
     
-    # Extract text
-    text = extract_text_from_pdf(pdf_path, progress_callback)
-    
-    # Get metadata
-    with open(pdf_path, 'rb') as file:
-        pdf_reader = PyPDF2.PdfReader(file)
-        page_count = len(pdf_reader.pages)
+    # Extract text and page count in one single pass
+    text, page_count = extract_text_from_pdf(pdf_path, progress_callback)
     
     result = {
         "text": text,
@@ -172,7 +151,5 @@ def process_pdf_document(
         "file_name": os.path.basename(pdf_path),
         "char_count": len(text)
     }
-    
-    print(f"[PDFProcessor] Processed PDF: {page_count} pages, {len(text)} characters")
     
     return result

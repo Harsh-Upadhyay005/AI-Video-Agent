@@ -468,38 +468,67 @@ def convert_to_wav(input_path: str) -> str:
         logger.error(f"Conversion failed: {str(e)}", exc_info=True)
         raise RuntimeError(f"Failed to convert file: {str(e)}")
 
-def chunk_audio(wav_path: str, chunk_minutes: int = 10) -> list:
+def get_audio_duration_seconds(file_path: str) -> float:
+    """Fast audio duration check using file size for 16kHz 16-bit mono WAV or ffprobe."""
+    try:
+        # For 16kHz mono 16-bit PCM WAV: 32000 bytes/sec
+        if file_path.lower().endswith(".wav"):
+            size = os.path.getsize(file_path)
+            # 44 byte header
+            pcm_bytes = max(0, size - 44)
+            return pcm_bytes / 32000.0
+    except Exception:
+        pass
+    return 0.0
+
+
+def chunk_audio(wav_path: str, chunk_minutes: int = 25) -> list:
     """
-    Split audio file into chunks of specified duration.
+    Split audio file into chunks of specified duration only if necessary.
+    Faster-whisper and modern STT engines prefer continuous files up to 30+ minutes.
     
     Args:
         wav_path: Path to WAV file
-        chunk_minutes: Duration of each chunk in minutes
+        chunk_minutes: Duration of each chunk in minutes (default: 25)
         
     Returns:
         List of chunk file paths
     """
-    logger.info(f"Chunking audio: {wav_path} ({chunk_minutes} min chunks)")
+    # Check estimated duration
+    duration_sec = get_audio_duration_seconds(wav_path)
+    max_chunk_sec = chunk_minutes * 60
+
+    # If audio is under chunk threshold (e.g. 25-30 minutes), do NOT chunk!
+    if duration_sec > 0 and duration_sec <= max_chunk_sec:
+        logger.info(f"Audio duration is {duration_sec/60:.1f} mins (<= {chunk_minutes} mins). Processing as single stream (no chunking needed).")
+        return [wav_path]
+
+    logger.info(f"Chunking long audio: {wav_path} ({chunk_minutes} min chunks)")
     
-    audio = AudioSegment.from_wav(wav_path)
-    chunk_ms = chunk_minutes * 60 * 1000
-    
-    chunks = []
-    total_duration = len(audio) / 1000 / 60  # minutes
-    
-    logger.info(f"Audio duration: {total_duration:.2f} minutes")
-    
-    for i, start in enumerate(range(0, len(audio), chunk_ms)):
-        chunk = audio[start: start + chunk_ms]
-        chunk_path = f"{wav_path}_chunk_{i}.wav"
-        chunk.export(chunk_path, format="wav")
-        chunks.append(chunk_path)
+    try:
+        audio = AudioSegment.from_wav(wav_path)
+        chunk_ms = chunk_minutes * 60 * 1000
         
-        chunk_duration = len(chunk) / 1000 / 60
-        logger.info(f"Created chunk {i + 1}: {chunk_duration:.2f} minutes")
-    
-    logger.info(f"Created {len(chunks)} chunk(s)")
-    return chunks
+        if len(audio) <= chunk_ms:
+            return [wav_path]
+            
+        chunks = []
+        total_duration = len(audio) / 1000 / 60  # minutes
+        logger.info(f"Audio duration: {total_duration:.2f} minutes")
+        
+        for i, start in enumerate(range(0, len(audio), chunk_ms)):
+            chunk = audio[start: start + chunk_ms]
+            chunk_path = f"{wav_path}_chunk_{i}.wav"
+            chunk.export(chunk_path, format="wav")
+            chunks.append(chunk_path)
+            chunk_duration = len(chunk) / 1000 / 60
+            logger.info(f"Created chunk {i + 1}: {chunk_duration:.2f} minutes")
+        
+        logger.info(f"Created {len(chunks)} chunk(s)")
+        return chunks
+    except Exception as e:
+        logger.warning(f"Audio chunking encountered error: {e}. Falling back to single file.")
+        return [wav_path]
 
 def process_input(source: str) -> list:
     """
@@ -528,9 +557,7 @@ def process_input(source: str) -> list:
         # Convert to WAV (works for both audio and video)
         wav_path = convert_to_wav(source)
     
-    logger.info("Chunking audio...")
-    chunks = chunk_audio(wav_path)
-    
-    logger.info(f"  Audio processing complete - {len(chunks)} chunk(s) created")
+    chunks = chunk_audio(wav_path, chunk_minutes=25)
+    logger.info(f"  Audio processing complete - {len(chunks)} chunk(s) prepared")
     return chunks
 

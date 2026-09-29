@@ -66,11 +66,24 @@ def _get_collection_name(video_id: str = None) -> str:
     
     return sanitized or COLLECTION_NAME
 
+# Singleton cache for embeddings model
+_embeddings_instance = None
+_docs_cache = {}
+
+
 def get_embeddings():
-    return HuggingFaceEmbeddings(
-        model_name = EMBEDDING_MODEL,
-        model_kwargs = {"device" : 'cpu'}
-    )
+    """Get singleton HuggingFace embeddings model with batched encoding."""
+    global _embeddings_instance
+    if _embeddings_instance is None:
+        device = os.getenv("EMBEDDING_DEVICE", "cpu")
+        logger.info(f"[VectorStore] Initializing singleton embeddings ({EMBEDDING_MODEL}) on {device}")
+        _embeddings_instance = HuggingFaceEmbeddings(
+            model_name=EMBEDDING_MODEL,
+            model_kwargs={"device": device},
+            encode_kwargs={"batch_size": 64, "normalize_embeddings": True}
+        )
+        logger.info("[VectorStore] Embeddings model initialized and cached")
+    return _embeddings_instance
 
 def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     """
@@ -120,11 +133,11 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
         persist_directory=CHROMA_DIR
     )
 
-    # Persist documents for BM25 retrieval
+    # Persist documents for BM25 retrieval (caches in memory and writes to disk)
     _persist_documents(docs, video_id)
 
     logger.info(f"[VectorStore]   Created {len(docs)} chunks in collection '{collection_name}'")
-    logger.info("[VectorStore]   Documents persisted for BM25 retrieval")
+    logger.info("[VectorStore]   Documents ready for BM25 retrieval")
     return vector_store
 
 
@@ -195,12 +208,13 @@ def _persist_documents(docs: List[Document], video_id: str = None):
     """
     try:
         collection_name = _get_collection_name(video_id)
+        _docs_cache[collection_name] = docs
         docs_path = os.path.join(DOCS_DIR, f"{collection_name}_docs.pkl")
         
         with open(docs_path, 'wb') as f:
             pickle.dump(docs, f)
         
-        logger.info(f"[VectorStore]   Persisted {len(docs)} documents to {docs_path}")
+        logger.info(f"[VectorStore]   Persisted {len(docs)} documents to memory and {docs_path}")
         
     except Exception as e:
         logger.error(f"[VectorStore] Failed to persist documents: {e}")
@@ -209,6 +223,7 @@ def _persist_documents(docs: List[Document], video_id: str = None):
 def _load_documents(video_id: str = None) -> Optional[List[Document]]:
     """
     Load persisted documents for BM25 retrieval.
+    Checks memory cache first to avoid disk I/O.
     
     Args:
         video_id: Video/source identifier
@@ -218,6 +233,9 @@ def _load_documents(video_id: str = None) -> Optional[List[Document]]:
     """
     try:
         collection_name = _get_collection_name(video_id)
+        if collection_name in _docs_cache:
+            return _docs_cache[collection_name]
+
         docs_path = os.path.join(DOCS_DIR, f"{collection_name}_docs.pkl")
         
         if not os.path.exists(docs_path):
@@ -227,7 +245,8 @@ def _load_documents(video_id: str = None) -> Optional[List[Document]]:
         with open(docs_path, 'rb') as f:
             docs = pickle.load(f)
         
-        logger.info(f"[VectorStore]   Loaded {len(docs)} persisted documents")
+        _docs_cache[collection_name] = docs
+        logger.info(f"[VectorStore]   Loaded {len(docs)} persisted documents from disk")
         return docs
         
     except Exception as e:

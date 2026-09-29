@@ -19,31 +19,55 @@ SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 SARVAM_STT_TRANSLATE_URL = "https://api.sarvam.ai/speech-to-text-translate"
 SARVAM_MODEL = os.getenv("SARVAM_STT_MODEL", "saaras:v2.5")
 
-_model = None
+# Global model cache
+_faster_model = None
+_legacy_model = None
+_engine_type = None
 
 
 def load_model():
-    """Load Whisper model once and reuse it."""
-    global _model
-    if _model is None:
-        print(f"[Whisper] Loading model: {WHISPER_MODEL}")
-        _model = whisper.load_model(WHISPER_MODEL)
-        print(f"[Whisper] Model loaded successfully.")
-    return _model
+    """Load fastest available Whisper model once and reuse it."""
+    global _faster_model, _legacy_model, _engine_type
+    
+    if _faster_model is not None:
+        return _faster_model
+    if _legacy_model is not None:
+        return _legacy_model
+        
+    device = os.getenv("WHISPER_DEVICE", "auto").lower()
+    if device == "auto":
+        try:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
+            
+    compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8") if device == "cpu" else "float16"
+    threads = min(4, os.cpu_count() or 4)
+
+    try:
+        from faster_whisper import WhisperModel
+        print(f"[Whisper] Loading faster-whisper model: {WHISPER_MODEL} ({device}, {compute_type})")
+        _faster_model = WhisperModel(WHISPER_MODEL, device=device, compute_type=compute_type, cpu_threads=threads)
+        _engine_type = "faster-whisper"
+        print("[Whisper] faster-whisper loaded successfully.")
+        return _faster_model
+    except Exception as e:
+        print(f"[Whisper] faster-whisper not available ({e}), falling back to standard Whisper...")
+
+    try:
+        print(f"[Whisper] Loading standard Whisper model: {WHISPER_MODEL}")
+        _legacy_model = whisper.load_model(WHISPER_MODEL, device=device)
+        _engine_type = "whisper"
+        print("[Whisper] Model loaded successfully.")
+        return _legacy_model
+    except Exception as e:
+        print(f"[Whisper] Failed to load Whisper: {e}")
+        raise
 
 
 def transcribe_chunk_whisper(chunk_path: str, progress_callback: Optional[Callable] = None, return_segments: bool = False):
     """
-    Transcribe a single audio chunk using OpenAI Whisper.
-    
-    Args:
-        chunk_path: Path to the audio chunk
-        progress_callback: Optional callback for progress updates
-        return_segments: If True, return segments with timestamps; if False, return text only
-    
-    Returns:
-        If return_segments=False: Transcribed text string
-        If return_segments=True: Dict with 'text' and 'segments' (list of {text, start, end})
+    Transcribe a single audio chunk using high-performance faster-whisper or OpenAI Whisper.
     """
     model = load_model()
     
@@ -51,23 +75,42 @@ def transcribe_chunk_whisper(chunk_path: str, progress_callback: Optional[Callab
         progress_callback("transcribing", os.path.basename(chunk_path))
     
     try:
-        result = model.transcribe(chunk_path)
-        
-        if return_segments and "segments" in result:
-            # Return structured data with timestamps
-            return {
-                "text": result["text"],
-                "segments": [
-                    {
-                        "text": seg.get("text", ""),
-                        "start": seg.get("start", 0.0),
-                        "end": seg.get("end", 0.0)
-                    }
-                    for seg in result.get("segments", [])
-                ]
-            }
+        if _engine_type == "faster-whisper":
+            segments, info = model.transcribe(
+                chunk_path,
+                beam_size=1,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+                language="en"
+            )
+            seg_list = list(segments)
+            full_text = " ".join(s.text for s in seg_list).strip()
+            
+            if return_segments:
+                return {
+                    "text": full_text,
+                    "segments": [
+                        {"text": s.text, "start": s.start, "end": s.end}
+                        for s in seg_list
+                    ]
+                }
+            return full_text
         else:
-            # Backward compatible: return text only
+            options = {"fp16": False} if getattr(model, "device", None) == "cpu" else {}
+            result = model.transcribe(chunk_path, **options)
+            
+            if return_segments and "segments" in result:
+                return {
+                    "text": result["text"],
+                    "segments": [
+                        {
+                            "text": seg.get("text", ""),
+                            "start": seg.get("start", 0.0),
+                            "end": seg.get("end", 0.0)
+                        }
+                        for seg in result.get("segments", [])
+                    ]
+                }
             return result["text"]
     except Exception as e:
         print(f"[Whisper] Error transcribing {chunk_path}: {e}")
@@ -77,7 +120,7 @@ def transcribe_chunk_whisper(chunk_path: str, progress_callback: Optional[Callab
 
 
 def _send_to_sarvam(piece_path: str) -> str:
-    """Send one ≤30s WAV file to Sarvam and return the English transcript."""
+    """Send one <=30s WAV file to Sarvam and return the English transcript."""
     headers = {"api-subscription-key": SARVAM_API_KEY}
 
     with open(piece_path, "rb") as f:
@@ -101,8 +144,8 @@ def _send_to_sarvam(piece_path: str) -> str:
 
 def transcribe_chunk_sarvam(chunk_path: str, progress_callback: Optional[Callable] = None) -> str:
     """
-    Sarvam sync API only accepts ≤30s audio. We split this chunk into
-    25-second pieces, send each separately, and join the transcripts.
+    Sarvam sync API accepts <=30s audio. We split this chunk into
+    25-second pieces, send in parallel using a thread pool, and join the transcripts.
     """
     if not SARVAM_API_KEY:
         raise RuntimeError("SARVAM_API_KEY is not set in environment / .env")
@@ -110,23 +153,40 @@ def transcribe_chunk_sarvam(chunk_path: str, progress_callback: Optional[Callabl
     audio = AudioSegment.from_wav(chunk_path)
     piece_ms = SARVAM_PIECE_SECONDS * 1000
 
-    full_text = ""
     total_pieces = (len(audio) + piece_ms - 1) // piece_ms
+    pieces = [audio[start: start + piece_ms] for start in range(0, len(audio), piece_ms)]
 
-    for i, start in enumerate(range(0, len(audio), piece_ms)):
-        piece = audio[start: start + piece_ms]
-        piece_path = f"{chunk_path}_sv_{i}.wav"
-        piece.export(piece_path, format="wav")
-
+    def process_piece(index: int, piece_data) -> tuple[int, str]:
+        piece_path = f"{chunk_path}_sv_{index}.wav"
+        piece_data.export(piece_path, format="wav")
         try:
-            if progress_callback:
-                progress_callback("transcribing_piece", f"piece {i + 1}/{total_pieces}")
-            print(f"   Sarvam piece {i + 1}/{total_pieces} ...")
-            full_text += _send_to_sarvam(piece_path) + " "
+            transcript = _send_to_sarvam(piece_path)
+            return index, transcript
         finally:
             if os.path.exists(piece_path):
-                os.remove(piece_path)
+                try:
+                    os.remove(piece_path)
+                except Exception:
+                    pass
 
+    # Process pieces concurrently (up to 5 workers for optimal speed)
+    max_workers = min(5, max(1, total_pieces))
+    results = {}
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_piece, i, piece): i for i, piece in enumerate(pieces)}
+        for future in as_completed(futures):
+            try:
+                idx, text = future.result()
+                results[idx] = text
+                if progress_callback:
+                    progress_callback("transcribing_piece", f"piece {len(results)}/{total_pieces}")
+            except Exception as e:
+                idx = futures[future]
+                print(f"[Sarvam] Piece {idx + 1} failed: {e}")
+                results[idx] = ""
+
+    full_text = " ".join(results.get(i, "") for i in range(total_pieces))
     return full_text.strip()
 
 
