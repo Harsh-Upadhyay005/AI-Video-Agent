@@ -1,6 +1,4 @@
-# =============================================================================
-# AI Video Agent - Production Requirements
-# =============================================================================
+
 # Python 3.8+ required
 # Last updated: 2026
 # =============================================================================
@@ -23,7 +21,7 @@ setuptools<81                     # Provides pkg_resources required by legacy Wh
 openai-whisper==20231117          # OpenAI Whisper for transcription
 torch==2.2.0                      # PyTorch backend for Whisper
 torchaudio==2.2.0                 # Audio utilities for PyTorch
-sarvam-ai==1.0.0                  # Sarvam AI for Hinglish transcription
+
 
 # ── Translation ──────────────────────────────────────────────────────────────
 deep-translator==1.11.4           # Lightweight translation wrapper
