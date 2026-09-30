@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎬 Flow • AI Video Agent
+# 🎬 videoQuery • AI Video Agent
 ### Intelligent Multi-Modal Video, Audio & Document Intelligence Platform
 
 **Transform YouTube videos, audio recordings, and PDF documents into structured transcripts, executive summaries, and interactive RAG-powered conversations.**
@@ -23,7 +23,7 @@
 
 ## 🌟 Overview
 
-**Flow (AI Video Agent)** is a full-stack, enterprise-grade multi-modal AI platform designed to eliminate hours of manual note-taking and video reviews. By pairing local speech-to-text models with modern vector search and Large Language Models, Flow transcribes media in seconds, indexes knowledge into ChromaDB, and allows users to converse directly with video or document content using Retrieval-Augmented Generation (RAG).
+**videoQuery (AI Video Agent)** is a full-stack, enterprise-grade multi-modal AI platform designed to eliminate hours of manual note-taking and video reviews. By pairing local speech-to-text models with modern vector search and Large Language Models, videoQuery transcribes media in seconds, indexes knowledge into ChromaDB, and allows users to converse directly with video or document content using Retrieval-Augmented Generation (RAG).
 
 ---
 
@@ -45,7 +45,7 @@
 
 ### 🔐 Clerk Authentication & Studio Security
 - **Protected Video Studio**: Access to media analyzers is guarded by Clerk authentication.
-- **Project-Themed UI**: Beautiful authentication flows customized with the project's cream (`#FDFCF0`) and lavender (`#D9CCF5`) design tokens.
+- **Project-Themed UI**: Beautiful authentication videoQuerys customized with the project's cream (`#FDFCF0`) and lavender (`#D9CCF5`) design tokens.
 - **Top Navigation User Button**: Seamless profile management and sign-out controls built directly into the header.
 
 ### 📱 Premium, Fully Responsive UX
@@ -78,13 +78,13 @@
     └───────────────┬───────────────┘                   │
                     │                                   │
                     ▼                                   ▼
-    ┌───────────────────────────────────────────────────────────────────┐
+    ┌ ────────────────┐
     │              Chunking & ChromaDB Vector Store                     │
     │     (sentence-transformers/all-MiniLM-L6-v2 Embeddings)           │
     └─────────────────────────────────┬─────────────────────────────────┘
                                       │
                                       ▼
-    ┌───────────────────────────────────────────────────────────────────┐
+    ┌ ────────────────┐
     │               RAG Engine & Intelligent Query Router               │
     │      - LOCAL_QA (Top-8 Vector Chunk Retrieval)                    │
     │      - GLOBAL_SUMMARY (Precomputed Macro Metadata)                │
@@ -262,7 +262,7 @@ npm run dev
 ## 📚 Technical Documentation
 
 Explore detailed documentation in the [`docs/`](docs/) directory:
-- 🏛️ **[System Architecture](docs/ARCHITECTURE_DIAGRAM.md)**: Deep dive into component interaction and data flows.
+- 🏛️ **[System Architecture](docs/ARCHITECTURE_DIAGRAM.md)**: Deep dive into component interaction and data videoQuerys.
 - 🔍 **[Enhanced RAG Guide](docs/ENHANCED_RAG_GUIDE.md)**: Query routing strategies and map-reduce summarization.
 - 📁 **[File Upload Engine](docs/FILE_UPLOAD_FEATURE.md)**: Handling multi-format audio and video processing pipelines.
 - 📄 **[PDF Analysis Guide](docs/PDF_SUPPORT_GUIDE.md)**: Document segmentation and text extraction architecture.

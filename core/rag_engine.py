@@ -127,7 +127,7 @@ class EnhancedRAGChain:
     Enhanced RAG chain for querying indexed content.
     Works uniformly for PDF documents and audio/video transcripts.
     
-    Query flow:
+    Query videoQuery:
     User question → Retrieve relevant chunks → LLM answers using chunks
     
     CRITICAL: LLM receives ONLY retrieved chunks, never entire document.
@@ -186,13 +186,13 @@ class EnhancedRAGChain:
         1. Whole-content summarization (map-reduce) for requests like "summarize", "give me 50-word summary"
         2. Normal RAG retrieval for specific questions
         
-        Flow for whole-content:
+        videoQuery for whole-content:
         1. Detect summarization intent
         2. Retrieve ALL chunks (not just top-k)
         3. Hierarchically summarize using map-reduce
         4. Apply user constraints (word limits, format)
         
-        Flow for specific questions:
+        videoQuery for specific questions:
         1. Retrieve relevant chunks (top-k)
         2. Send ONLY retrieved chunks to LLM
         3. Return answer with sources

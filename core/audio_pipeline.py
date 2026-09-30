@@ -1,7 +1,7 @@
 """
 Audio/Video Ingestion Pipeline - STT + Indexing Only.
 
-Audio/Video Processing Flow:
+Audio/Video Processing videoQuery:
 Audio/YouTube → Extract audio → STT → Transcript → Chunk → Embed → Vector store → Ready for RAG
 
 STT is used (audio → text conversion):

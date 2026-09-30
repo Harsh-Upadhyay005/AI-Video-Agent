@@ -59,7 +59,7 @@ class AnalysisService:
         """
         Perform analysis using RAG retrieval.
         
-        Flow:
+        videoQuery:
         1. Retrieve relevant chunks from vector store
         2. Send ONLY retrieved chunks to LLM
         3. Return structured analysis
