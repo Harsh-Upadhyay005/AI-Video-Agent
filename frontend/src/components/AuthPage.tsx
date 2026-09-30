@@ -47,7 +47,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </div>
 
             <p className="text-xs font-bold uppercase tracking-widest text-[#1A1A1A]/70 mb-3">
-              Flow • Video Studio
+              videoQuery • Video Studio
             </p>
             <h1 className="font-['Baskervville',serif] text-4xl sm:text-5xl leading-tight text-[#1A1A1A]">
               Analyze video.
@@ -100,7 +100,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <span className="w-0.75 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.3s', height: '60%' }} />
                   <span className="w-0.75 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.2s', height: '80%' }} />
                 </div>
-                <span className="font-['Outfit',sans-serif] font-bold text-sm text-[#1A1A1A]">Flow</span>
+                <span className="font-['Outfit',sans-serif] font-bold text-sm text-[#1A1A1A]">videoQuery</span>
               </div>
             </div>
 
@@ -143,7 +143,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </div>
 
                 {/* Clerk Component Form */}
-                <div className="flex justify-center w-full overflow-x-auto">
+                <div className="flex justify-center w-full overvideoQuery-x-auto">
                   {mode === 'login' ? (
                     <SignIn
                       appearance={clerkAppearance}
