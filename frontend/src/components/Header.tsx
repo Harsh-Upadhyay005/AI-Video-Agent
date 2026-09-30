@@ -95,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="w-0.75 bg-[#1A1A1A] rounded-full soundwave-bar" style={{ animationDelay: '0.4s', height: '50%' }} />
             </div>
             <span className="font-['Outfit',sans-serif] font-bold text-lg sm:text-xl text-[#1A1A1A] tracking-tight">
-              Flow
+              videoQuery
             </span>
             {/* Tiny backend status dot */}
             <span
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
               </a>
             </nav>
 
-            {/* Hidden on mobile to avoid row overflow, accessible via Center Tab */}
+            {/* Hidden on mobile to avoid row overvideoQuery, accessible via Center Tab */}
             <button
               onClick={onNavigateToStudio}
               className="hidden md:flex items-center gap-2 rounded-full bg-[#E5D7FA] hover:bg-[#D9CCF5] border border-black/10 px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs font-bold text-[#1A1A1A] transition-all hover:scale-105 active:scale-95 shadow-xs whitespace-nowrap"

@@ -126,7 +126,7 @@ export const InteractiveChat: React.FC<InteractiveChatProps> = ({ currentAnalysi
         </div>
 
         {/* Chat Window Container */}
-        <div className="rounded-2xl sm:rounded-3xl border-2 border-[#1A1A1A] bg-white shadow-xl overflow-hidden flex flex-col h-[480px] sm:h-[540px] md:h-[600px]">
+        <div className="rounded-2xl sm:rounded-3xl border-2 border-[#1A1A1A] bg-white shadow-xl overvideoQuery-hidden flex flex-col h-[480px] sm:h-[540px] md:h-[600px]">
           {/* Top Chat Bar */}
           <div className="p-3 sm:p-4 bg-[#FDFCF0] border-b border-[#1A1A1A]/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 sm:gap-3">
@@ -146,7 +146,7 @@ export const InteractiveChat: React.FC<InteractiveChatProps> = ({ currentAnalysi
           </div>
 
           {/* Preset Chips */}
-          <div className="p-2.5 sm:p-3 bg-[#FDFCF0]/40 border-b border-[#1A1A1A]/5 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
+          <div className="p-2.5 sm:p-3 bg-[#FDFCF0]/40 border-b border-[#1A1A1A]/5 flex items-center gap-1.5 sm:gap-2 overvideoQuery-x-auto no-scrollbar">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#8A8A8A] shrink-0 pl-1">
               Suggestions:
             </span>
@@ -163,7 +163,7 @@ export const InteractiveChat: React.FC<InteractiveChatProps> = ({ currentAnalysi
           </div>
 
           {/* Messages Body */}
-          <div className="flex-1 p-3.5 sm:p-6 overflow-y-auto space-y-3.5 sm:space-y-4 bg-[#FDFCF0]/20">
+          <div className="flex-1 p-3.5 sm:p-6 overvideoQuery-y-auto space-y-3.5 sm:space-y-4 bg-[#FDFCF0]/20">
             {messages.map((m) => (
               <div
                 key={m.id}
@@ -175,13 +175,13 @@ export const InteractiveChat: React.FC<InteractiveChatProps> = ({ currentAnalysi
                   </div>
                 )}
                 <div
-                  className={`max-w-[85%] sm:max-w-xl p-3 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed relative group break-words overflow-x-auto ${
+                  className={`max-w-[85%] sm:max-w-xl p-3 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed relative group break-words overvideoQuery-x-auto ${
                     m.sender === "user"
                       ? "bg-[#1A1A1A] text-white rounded-br-none shadow-xs [&_strong]:text-[#D9CCF5] [&_em]:text-[#D9CCF5]/90 [&_code]:bg-white/10 [&_code]:px-1 [&_code]:rounded [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mb-1 [&_p]:my-1"
                       : "bg-white border border-[#1A1A1A]/15 text-[#1A1A1A] rounded-bl-none shadow-xs [&_strong]:text-[#1A1A1A] [&_strong]:font-bold [&_em]:text-[#8A8A8A] [&_code]:bg-[#FDFCF0] [&_code]:px-1 [&_code]:rounded [&_code]:border [&_code]:border-[#1A1A1A]/10 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mb-1 [&_p]:my-1"
                   }`}
                 >
-                  <div className="markdown-content overflow-x-auto">
+                  <div className="markdown-content overvideoQuery-x-auto">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
                   </div>
                   <div className="mt-2 flex items-center justify-between border-t border-current/10 pt-1.5 text-[9px] sm:text-[10px] opacity-70">
