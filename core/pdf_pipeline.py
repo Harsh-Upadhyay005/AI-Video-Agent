@@ -1,7 +1,7 @@
 """
 PDF Ingestion Pipeline - Local Processing Only.
 
-PDF Processing Flow:
+PDF Processing videoQuery:
 PDF → Extract text locally → Chunk → Embed → Vector store → Ready for RAG
 
 NO LLM calls during ingestion:

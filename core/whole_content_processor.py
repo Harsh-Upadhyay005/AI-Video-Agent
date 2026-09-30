@@ -56,7 +56,7 @@ class WholeContentProcessor:
         """
         Process a whole-content summarization request.
         
-        Flow:
+        videoQuery:
         1. Retrieve ALL chunks from vector store (not just top-k)
         2. Group chunks into manageable sections
         3. Summarize each section (parallel if possible)

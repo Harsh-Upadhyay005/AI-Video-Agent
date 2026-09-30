@@ -88,7 +88,7 @@ def get_current_user(
 ) -> AuthUser:
     """
     Authentication is optional. Requests without a token run as a guest user
-    so analysis and chat stay available without a login flow.
+    so analysis and chat stay available without a login videoQuery.
     """
     optional = get_current_user_optional(authorization)
     if optional:
