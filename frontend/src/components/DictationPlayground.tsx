@@ -42,7 +42,7 @@ export const DictationPlayground: React.FC = () => {
 
   // WPM Counter animation
   const [keyboardWpm, setKeyboardWpm] = useState(0);
-  const [flowWpm, setFlowWpm] = useState(0);
+  const [videoQueryWpm, setvideoQueryWpm] = useState(0);
 
   useEffect(() => {
     const duration = 1500; // 1.5s
@@ -53,7 +53,7 @@ export const DictationPlayground: React.FC = () => {
     const timer = setInterval(() => {
       step++;
       setKeyboardWpm(Math.min(Math.floor((45 / steps) * step), 45));
-      setFlowWpm(Math.min(Math.floor((220 / steps) * step), 220));
+      setvideoQueryWpm(Math.min(Math.floor((220 / steps) * step), 220));
 
       if (step >= steps) {
         clearInterval(timer);
@@ -102,7 +102,7 @@ export const DictationPlayground: React.FC = () => {
   };
 
   return (
-    <section id="playground" className="py-16 sm:py-24 px-4 sm:px-6 md:px-8 bg-[#033E35] text-white overflow-hidden relative">
+    <section id="playground" className="py-16 sm:py-24 px-4 sm:px-6 md:px-8 bg-[#033E35] text-white overvideoQuery-hidden relative">
       {/* Decorative Wave BG */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#033E35] via-[#022f28] to-[#033E35] pointer-events-none z-0" />
       
@@ -118,56 +118,109 @@ export const DictationPlayground: React.FC = () => {
           </p>
         </div>
 
-        {/* Speed Comparison Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 items-stretch mb-8 sm:mb-12">
+        {/* Speed Comparison Layout - Redesigned */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-stretch mb-8 sm:mb-12">
           
-          {/* Manual Review (60 mins) Card */}
-          <div className="md:col-span-4 rounded-3xl border border-emerald-500/25 bg-emerald-950/20 p-6 sm:p-8 flex flex-col justify-between min-h-[190px] sm:min-h-[220px]">
-            <div>
-              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-emerald-400 opacity-80">Manual Review</span>
-              <div className="font-['Baskervville',serif] text-4xl sm:text-5xl font-normal mt-2">
-                {keyboardWpm ? Math.round(keyboardWpm * 1.33) : 0} <span className="text-base sm:text-lg font-sans text-emerald-300">mins</span>
+          {/* Manual Review Card - Improved Design */}
+          <div className="lg:col-span-5 rounded-2xl sm:rounded-3xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-emerald-900/20 to-emerald-950/40 p-6 sm:p-8 flex flex-col justify-between min-h-[200px] sm:min-h-[240px] backdrop-blur-sm relative overflow-hidden group hover:border-emerald-500/50 transition-all duration-300">
+            {/* Subtle gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400/90 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Manual Review
+                </span>
+                <span className="text-[10px] text-emerald-300/60 font-mono">Traditional Method</span>
+              </div>
+              
+              <div className="font-['Baskervville',serif] text-5xl sm:text-6xl md:text-7xl font-bold mt-2 text-white">
+                {keyboardWpm ? Math.round(keyboardWpm * 1.33) : 0}
+                <span className="text-xl sm:text-2xl font-sans text-emerald-300 ml-2 font-normal">mins</span>
+              </div>
+              
+              <div className="mt-4 flex items-center gap-2 text-emerald-200/50 text-xs">
+                <div className="w-8 h-0.5 bg-emerald-500/30" />
+                <span>Per 1-hour video</span>
               </div>
             </div>
-            <p className="text-xs text-emerald-200/50 leading-relaxed font-mono mt-4">
-              "Pause video, type bullet points, rewind to hear name, type action items..."
-            </p>
+            
+            <div className="relative z-10 mt-6 p-4 rounded-xl bg-black/20 border border-emerald-500/10 backdrop-blur-sm">
+              <p className="text-xs text-emerald-200/70 leading-relaxed font-mono">
+                "Pause video, type bullet points, rewind to hear names, type action items..."
+              </p>
+            </div>
           </div>
 
-          {/* AI Video Agent (30 secs) Card */}
-          <div className="md:col-span-8 rounded-3xl overflow-hidden relative shadow-2xl min-h-[220px] flex flex-col justify-between p-6 sm:p-8 border border-white/10">
-            {/* Blurry video-like backdrop */}
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-800/40 to-teal-800/40 mix-blend-overlay z-0" />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(201,170,250,0.15),transparent)] z-0" />
+          {/* AI Video Agent Card - Enhanced Design */}
+          <div className="lg:col-span-7 rounded-2xl sm:rounded-3xl overflow-hidden relative shadow-2xl min-h-[240px] sm:min-h-[280px] flex flex-col justify-between border-2 border-white/20 backdrop-blur-xl group hover:border-white/40 transition-all duration-300">
+            {/* Animated gradient background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-900/60 via-indigo-900/50 to-teal-900/60" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(167,139,250,0.2),transparent_50%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(52,211,153,0.15),transparent_50%)]" />
             
-            <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start gap-2">
-              <div>
-                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#D9CCF5]">AI Video Agent</span>
-                <div className="font-['Baskervville',serif] text-4xl sm:text-5xl font-semibold mt-1 sm:mt-2">
-                  {flowWpm ? Math.round(flowWpm * 0.136) : 0} <span className="text-base sm:text-lg font-sans text-[#D9CCF5]">secs</span>
+            {/* Animated grid pattern */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute inset-0" style={{
+                backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                backgroundSize: '50px 50px'
+              }} />
+            </div>
+            
+            <div className="relative z-10 p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-purple-300 animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-200">
+                      AI Video Agent
+                    </span>
+                  </div>
+                  
+                  <div className="font-['Baskervville',serif] text-5xl sm:text-6xl md:text-7xl font-bold text-white">
+                    {videoQueryWpm ? Math.round(videoQueryWpm * 0.136) : 0}
+                    <span className="text-xl sm:text-2xl font-sans text-purple-200 ml-2 font-normal">secs</span>
+                  </div>
+                  
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-[10px] text-white/90 font-semibold uppercase tracking-wider">
+                        Vector Indexing Active
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-2 items-end">
+                  <div className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 backdrop-blur-sm">
+                    <span className="text-xs font-bold text-emerald-300">120x Faster</span>
+                  </div>
+                  <div className="text-[10px] text-white/60 font-mono">Real-time processing</div>
                 </div>
               </div>
-              <span className="text-[10px] bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-full text-white/80 border border-white/10 uppercase tracking-widest font-bold shrink-0">
-                Vector Indexing Active
-              </span>
+
+              <div className="p-4 rounded-xl bg-black/30 border border-white/10 backdrop-blur-md">
+                <p className="text-xs text-white/80 leading-relaxed italic font-mono">
+                  "Transcribing audio stream at 16kHz mono, computing text chunk embeddings, saving vector database..."
+                </p>
+              </div>
             </div>
 
-            <p className="relative z-10 text-xs text-white/70 leading-relaxed max-w-md italic mt-4 font-mono">
-              "Transcribing audio stream at 16kHz mono, computing text chunk embeddings, saving vector database..."
-            </p>
-
-            {/* Custom Soundwave Pill */}
-            <div className="relative z-10 flex justify-center mt-6">
-              <div className="flex h-9 sm:h-10 w-32 sm:w-36 items-center justify-center gap-1 rounded-full border border-white/20 bg-black px-4 shadow-xl">
-                <span className="w-0.75 h-4 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.1s' }} />
-                <span className="w-0.75 h-6 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.3s' }} />
-                <span className="w-0.75 h-3 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.2s' }} />
-                <span className="w-0.75 h-5 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.4s' }} />
-                <span className="w-0.75 h-2 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.5s' }} />
-                <span className="w-0.75 h-5 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.15s' }} />
-                <span className="w-0.75 h-3 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.35s' }} />
-                <span className="w-0.75 h-6 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.25s' }} />
-                <span className="w-0.75 h-4 bg-white rounded-full soundwave-bar" style={{ animationDelay: '0.45s' }} />
+            {/* Enhanced Soundwave Visualization */}
+            <div className="relative z-10 flex justify-center pb-6 sm:pb-8">
+              <div className="flex h-12 sm:h-14 w-40 sm:w-48 items-center justify-center gap-1.5 rounded-2xl border-2 border-white/30 bg-black/50 px-5 shadow-2xl backdrop-blur-xl">
+                {[...Array(10)].map((_, i) => (
+                  <span
+                    key={i}
+                    className="w-1 bg-gradient-to-t from-purple-400 to-white rounded-full soundwave-bar"
+                    style={{
+                      animationDelay: `${i * 0.1}s`,
+                      height: `${20 + Math.random() * 40}%`
+                    }}
+                  />
+                ))}
               </div>
             </div>
           </div>
@@ -192,7 +245,7 @@ export const DictationPlayground: React.FC = () => {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.4 }}
-              className="overflow-hidden space-y-6 pt-2"
+              className="overvideoQuery-hidden space-y-6 pt-2"
             >
               {/* Preset Selector Tabs */}
               <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
@@ -272,7 +325,7 @@ export const DictationPlayground: React.FC = () => {
                 </div>
 
                 {/* Right Column: AI Output */}
-                <div className="flex flex-col justify-between p-5 sm:p-8 rounded-3xl border border-[#D9CCF5]/30 bg-[#FDFCF0] text-[#0A0A0A] shadow-lg relative overflow-hidden">
+                <div className="flex flex-col justify-between p-5 sm:p-8 rounded-3xl border border-[#D9CCF5]/30 bg-[#FDFCF0] text-[#0A0A0A] shadow-lg relative overvideoQuery-hidden">
                   <div>
                     <div className="flex items-center justify-between pb-4 border-b border-black/10">
                       <span className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A] flex items-center gap-1">

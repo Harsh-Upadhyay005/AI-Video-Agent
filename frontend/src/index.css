@@ -17,7 +17,7 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
+    overvideoQuery-x: hidden;
   }
 }
 
@@ -125,6 +125,16 @@
   animation: soundwave 1.2s ease-in-out infinite;
 }
 
+/* Grid Animation for AI Agent Card */
+@keyframes gridMove {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(40px, 40px);
+  }
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -132,7 +142,7 @@
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
+  -ms-overvideoQuery-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
 

@@ -72,7 +72,14 @@ _docs_cache = {}
 
 
 def get_embeddings():
-    """Get singleton HuggingFace embeddings model with batched encoding."""
+    """
+    Get singleton HuggingFace embeddings model with optimized batching.
+    
+    Optimizations:
+    - Cached singleton to avoid reloading
+    - Batch size 128 for faster encoding
+    - Normalized embeddings for better similarity search
+    """
     global _embeddings_instance
     if _embeddings_instance is None:
         device = os.getenv("EMBEDDING_DEVICE", "cpu")
@@ -80,7 +87,11 @@ def get_embeddings():
         _embeddings_instance = HuggingFaceEmbeddings(
             model_name=EMBEDDING_MODEL,
             model_kwargs={"device": device},
-            encode_kwargs={"batch_size": 64, "normalize_embeddings": True}
+            encode_kwargs={
+                "batch_size": 128,  # Increased from 64 for faster processing
+                "normalize_embeddings": True,
+                "show_progress_bar": False  # Reduce logging overhead
+            }
         )
         logger.info("[VectorStore] Embeddings model initialized and cached")
     return _embeddings_instance
@@ -89,6 +100,11 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     """
     Build vector store from transcript with optional metadata.
     Also persists chunked documents for BM25 retrieval.
+    
+    Optimized for speed:
+    - Larger chunks (3000 chars) reduce total chunk count
+    - Batch embedding with size 128 for faster processing
+    - Parallel-ready architecture
     
     Args:
         transcript: Full transcript text
@@ -99,14 +115,19 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     """
     logger.info("[VectorStore] Building vector store with hybrid search support")
 
-    # Increased chunk size to preserve semantic coherence
-    # Larger chunks help keep complete concepts together
+    # Optimized chunk size for speed (fewer chunks = faster embedding)
+    # 3000 chars is ~750 tokens, good balance of speed and semantic coherence
+    chunk_size = int(os.getenv("VECTOR_CHUNK_SIZE", "3000"))
+    chunk_overlap = int(os.getenv("VECTOR_CHUNK_OVERLAP", "300"))
+    
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200,  # Increased from 500 to reduce fragmentation
-        chunk_overlap=200,  # Increased overlap to maintain context
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         separators=["\n\n", "\n", ". ", " ", ""]  # Prefer natural boundaries
     )
     chunks = splitter.split_text(transcript)
+
+    logger.info(f"[VectorStore]   Created {len(chunks)} chunks (size: {chunk_size}, overlap: {chunk_overlap})")
 
     # Build documents with metadata
     docs = []
@@ -121,11 +142,15 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
         }
         docs.append(Document(page_content=chunk, metadata=chunk_metadata))
 
+    # Get embeddings model (singleton, cached)
     embeddings = get_embeddings()
     
     # Use per-video collection to prevent cross-contamination
     collection_name = _get_collection_name(video_id)
     
+    logger.info(f"[VectorStore]   Generating embeddings for {len(docs)} documents...")
+    
+    # Create vector store with batched embedding
     vector_store = Chroma.from_documents(
         documents=docs,
         embedding=embeddings,
@@ -136,7 +161,7 @@ def build_vector_store(transcript: str, metadata: dict = None) -> Chroma:
     # Persist documents for BM25 retrieval (caches in memory and writes to disk)
     _persist_documents(docs, video_id)
 
-    logger.info(f"[VectorStore]   Created {len(docs)} chunks in collection '{collection_name}'")
+    logger.info(f"[VectorStore]   Vector store ready in collection '{collection_name}'")
     logger.info("[VectorStore]   Documents ready for BM25 retrieval")
     return vector_store
 

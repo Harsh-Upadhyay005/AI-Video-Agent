@@ -90,7 +90,7 @@ def get_reranked_retriever(
     """
     Wrap a retriever with cross-encoder reranking.
     
-    Flow:
+    videoQuery:
     1. Base retriever fetches candidates (e.g., 20 docs)
     2. Cross-encoder scores each (query, doc) pair
     3. Return top_n highest-scoring docs

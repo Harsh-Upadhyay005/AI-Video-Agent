@@ -63,7 +63,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-[#FDFCF0] text-[#1A1A1A] font-sans overflow-x-hidden">
+      <div className="min-h-screen bg-[#FDFCF0] text-[#1A1A1A] font-sans overvideoQuery-x-hidden">
         <Header
           activeView={activeView}
           onNavigateToHome={() => setActiveView('home')}
