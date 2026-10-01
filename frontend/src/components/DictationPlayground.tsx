@@ -102,7 +102,7 @@ export const DictationPlayground: React.FC = () => {
   };
 
   return (
-    <section id="playground" className="py-16 sm:py-24 px-4 sm:px-6 md:px-8 bg-[#033E35] text-white overvideoQuery-hidden relative">
+    <section id="playground" className="py-16 sm:py-24 px-4 sm:px-6 md:px-8 bg-[#033E35] text-white overflow-hidden relative">
       {/* Decorative Wave BG */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#033E35] via-[#022f28] to-[#033E35] pointer-events-none z-0" />
       
@@ -245,7 +245,7 @@ export const DictationPlayground: React.FC = () => {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.4 }}
-              className="overvideoQuery-hidden space-y-6 pt-2"
+              className="overflow-hidden space-y-6 pt-2"
             >
               {/* Preset Selector Tabs */}
               <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
@@ -325,7 +325,7 @@ export const DictationPlayground: React.FC = () => {
                 </div>
 
                 {/* Right Column: AI Output */}
-                <div className="flex flex-col justify-between p-5 sm:p-8 rounded-3xl border border-[#D9CCF5]/30 bg-[#FDFCF0] text-[#0A0A0A] shadow-lg relative overvideoQuery-hidden">
+                <div className="flex flex-col justify-between p-5 sm:p-8 rounded-3xl border border-[#D9CCF5]/30 bg-[#FDFCF0] text-[#0A0A0A] shadow-lg relative overflow-hidden">
                   <div>
                     <div className="flex items-center justify-between pb-4 border-b border-black/10">
                       <span className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A] flex items-center gap-1">

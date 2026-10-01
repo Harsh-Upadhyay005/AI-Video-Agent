@@ -53,10 +53,23 @@ export const Header: React.FC<HeaderProps> = ({
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY = window.scrollY;
+          setScrolled(prev => {
+            // Hysteresis: only turn on if > 30, only turn off if < 10
+            if (!prev && currentY > 30) return true;
+            if (prev && currentY < 10) return false;
+            return prev;
+          });
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -75,9 +88,9 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <div className="fixed top-2 sm:top-4 left-0 right-0 z-50 flex justify-center px-2 sm:px-4">
+    <div className="fixed top-2 sm:top-4 left-0 right-0 z-50 flex justify-center px-2 sm:px-4 pointer-events-none">
       <header
-        className={`w-full max-w-5xl rounded-full border border-black/15 bg-[#FDFCF0]/90 py-2 sm:py-2.5 px-3 sm:pl-6 sm:pr-3 shadow-md backdrop-blur-md transition-all duration-300 ${
+        className={`w-full max-w-5xl rounded-full border border-black/15 bg-[#FDFCF0]/90 py-1.5 sm:py-2.5 px-2.5 sm:pl-6 sm:pr-3 shadow-md backdrop-blur-md pointer-events-auto transition-[box-shadow,border-color,background-color] duration-200 ${
           scrolled ? 'shadow-lg border-black/25 bg-[#FDFCF0]/95' : ''
         }`}
       >
@@ -144,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({
               </a>
             </nav>
 
-            {/* Hidden on mobile to avoid row overvideoQuery, accessible via Center Tab */}
+            {/* Hidden on mobile to avoid row overflow, accessible via Center Tab */}
             <button
               onClick={onNavigateToStudio}
               className="hidden md:flex items-center gap-2 rounded-full bg-[#E5D7FA] hover:bg-[#D9CCF5] border border-black/10 px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs font-bold text-[#1A1A1A] transition-all hover:scale-105 active:scale-95 shadow-xs whitespace-nowrap"
