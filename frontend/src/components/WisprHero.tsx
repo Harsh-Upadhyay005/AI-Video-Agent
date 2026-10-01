@@ -15,7 +15,7 @@ function WaveformMarquee() {
   const bars = Array.from({ length: WAVE_BAR_COUNT }, (_, index) => index);
 
   return (
-    <div className="relative h-full w-full overvideoQuery-hidden">
+    <div className="relative h-full w-full overflow-hidden">
       <motion.div
         className="flex h-full w-max items-center gap-1.5 px-3"
         animate={{ x: ["-50%", "0%"] }}
@@ -83,7 +83,7 @@ function SVGAnimation() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[400px] w-[100vw] -translate-x-1/2 -translate-y-1/2 overvideoQuery-visible hidden md:block"
+      className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[400px] w-full max-w-[100vw] -translate-x-1/2 -translate-y-1/2 overflow-visible hidden md:block"
     >
       <svg
         className="w-full h-full"
@@ -150,13 +150,13 @@ interface HeroProps {
 
 function Hero({ onNavigateToStudio }: HeroProps) {
   return (
-    <section className="relative flex min-h-[90vh] sm:min-h-screen w-full items-center justify-center overvideoQuery-x-hidden bg-[#FDFCF0] px-4 sm:px-6 py-20 sm:py-24">
+    <section className="relative flex min-h-[90vh] sm:min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#FDFCF0] px-4 sm:px-6 py-20 sm:py-24">
       <Content onNavigateToStudio={onNavigateToStudio} />
 
       <div className="absolute bottom-16 sm:bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-3">
-        <div className="relative w-24 sm:w-28 overvideoQuery-visible">
+        <div className="relative w-24 sm:w-28 overflow-visible">
           <SVGAnimation />
-          <div className="relative z-10 flex h-16 sm:h-20 w-full items-center overvideoQuery-hidden rounded-full border-2 border-black bg-white shadow-sm">
+          <div className="relative z-10 flex h-16 sm:h-20 w-full items-center overflow-hidden rounded-full border-2 border-black bg-white shadow-sm">
             <WaveformMarquee />
           </div>
         </div>
@@ -190,13 +190,13 @@ export const WisprHero: React.FC<WisprHeroProps> = ({
   }, []);
 
   return (
-    <div className="h-full min-h-full w-full overvideoQuery-hidden">
+    <div className="h-full min-h-full w-full overflow-hidden">
       <Hero onNavigateToStudio={onNavigateToStudio} />
     </div>
   );
 };
 
-export default function WisprvideoQueryAnimation() {
+export default function WisprVideoQueryAnimation() {
   useEffect(() => {
     const id = "baskervville-font";
 
@@ -213,7 +213,7 @@ export default function WisprvideoQueryAnimation() {
   }, []);
 
   return (
-    <div className="h-full min-h-full w-full overvideoQuery-hidden">
+    <div className="h-full min-h-full w-full overflow-hidden">
       <Hero />
     </div>
   );
