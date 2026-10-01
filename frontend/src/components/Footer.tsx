@@ -12,7 +12,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToStudio }) => {
     <div className="relative bg-[#0A0A0A] text-white">
       
       {/* 1. "Start videoQuerying" Section */}
-      <section className="relative w-full py-16 sm:py-28 px-4 sm:px-6 flex flex-col items-center justify-center overvideoQuery-hidden border-b border-white/10">
+      <section className="relative w-full py-16 sm:py-28 px-4 sm:px-6 flex flex-col items-center justify-center overflow-hidden border-b border-white/10">
         
         {/* Blurry Warm Backdrop */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(248,158,53,0.08),transparent_50%)]" />
