@@ -143,7 +143,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </div>
 
                 {/* Clerk Component Form */}
-                <div className="flex justify-center w-full overvideoQuery-x-auto">
+                <div className="flex justify-center w-full overflow-x-auto">
                   {mode === 'login' ? (
                     <SignIn
                       appearance={clerkAppearance}

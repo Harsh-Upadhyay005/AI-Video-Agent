@@ -84,14 +84,14 @@ class ErrorBoundary extends Component<Props, State> {
                     Error Details (Development Mode)
                   </summary>
                   <div className="mt-4 space-y-2">
-                    <div className="text-xs font-mono bg-red-50 p-3 rounded-lg border border-red-200 overvideoQuery-auto">
+                    <div className="text-xs font-mono bg-red-50 p-3 rounded-lg border border-red-200 overflow-auto">
                       <strong className="text-red-700">Error:</strong>
                       <pre className="mt-1 text-red-600 whitespace-pre-wrap">
                         {this.state.error.toString()}
                       </pre>
                     </div>
                     {this.state.errorInfo && (
-                      <div className="text-xs font-mono bg-gray-50 p-3 rounded-lg border border-gray-200 overvideoQuery-auto max-h-64">
+                      <div className="text-xs font-mono bg-gray-50 p-3 rounded-lg border border-gray-200 overflow-auto max-h-64">
                         <strong className="text-gray-700">Component Stack:</strong>
                         <pre className="mt-1 text-gray-600 whitespace-pre-wrap">
                           {this.state.errorInfo.componentStack}

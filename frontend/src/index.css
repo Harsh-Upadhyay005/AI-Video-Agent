@@ -17,7 +17,7 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overvideoQuery-x: hidden;
+    overflow-x: hidden;
   }
 }
 
@@ -142,7 +142,7 @@
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overvideoQuery-style: none;  /* IE and Edge */
+  -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
 

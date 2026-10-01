@@ -8,6 +8,7 @@ import { InteractiveChat } from './components/InteractiveChat';
 import { Footer } from './components/Footer';
 import PDFAnalyzer from './components/PDFAnalyzer';
 import AudioVideoAnalyzer from './components/AudioVideoAnalyzer';
+import { AnalysisResultCard } from './components/AnalysisResultCard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import type { AnalysisData } from './types/analysis';
@@ -27,6 +28,11 @@ function App() {
       try {
         const parsed = JSON.parse(saved) as AnalysisData;
         setCurrentAnalysis(parsed);
+        if (parsed.type === 'pdf') {
+          setAnalyzerType('pdf');
+        } else {
+          setAnalyzerType('audio-video');
+        }
       } catch (e) {
         console.error('Failed to parse cached analysis:', e);
         localStorage.removeItem('lastStudioAnalysis');
@@ -42,28 +48,35 @@ function App() {
 
   const handleExplorePresets = () => {
     setActiveView('studio');
-    setTimeout(() => {
-      const el = document.getElementById('studio');
-      el?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleAnalysisReady = (result: AnalysisData) => {
     setCurrentAnalysis(result);
+    if (result.type === 'pdf') {
+      setAnalyzerType('pdf');
+    } else {
+      setAnalyzerType('audio-video');
+    }
     try {
       localStorage.setItem('lastStudioAnalysis', JSON.stringify(result));
     } catch (e) {
       console.error('Failed to cache analysis to localStorage:', e);
     }
-    setTimeout(() => {
-      const chatEl = document.getElementById('chat');
-      chatEl?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+  };
+
+  const handleResetAnalysis = () => {
+    setCurrentAnalysis(null);
+    try {
+      localStorage.removeItem('lastStudioAnalysis');
+    } catch (e) {
+      console.error('Failed to remove cached analysis:', e);
+    }
   };
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-[#FDFCF0] text-[#1A1A1A] font-sans overvideoQuery-x-hidden">
+      <div className="min-h-screen bg-[#FDFCF0] text-[#1A1A1A] font-sans overflow-x-hidden">
         <Header
           activeView={activeView}
           onNavigateToHome={() => setActiveView('home')}
@@ -129,15 +142,27 @@ function App() {
                   <ErrorBoundary>
                     <div className="bg-white rounded-2xl sm:rounded-3xl border-2 border-[#1A1A1A] shadow-xl p-4 sm:p-6 md:p-8">
                       {analyzerType === 'audio-video' ? (
-                        <AudioVideoAnalyzer
-                          onAnalysisComplete={handleAnalysisReady}
-                          existingResult={currentAnalysis}
-                        />
+                        currentAnalysis && currentAnalysis.type !== 'pdf' ? (
+                          <AnalysisResultCard
+                            analysis={currentAnalysis}
+                            onReset={handleResetAnalysis}
+                          />
+                        ) : (
+                          <AudioVideoAnalyzer
+                            onAnalysisComplete={handleAnalysisReady}
+                          />
+                        )
                       ) : (
-                        <PDFAnalyzer
-                          onAnalysisComplete={handleAnalysisReady}
-                          existingResult={currentAnalysis}
-                        />
+                        currentAnalysis && currentAnalysis.type === 'pdf' ? (
+                          <AnalysisResultCard
+                            analysis={currentAnalysis}
+                            onReset={handleResetAnalysis}
+                          />
+                        ) : (
+                          <PDFAnalyzer
+                            onAnalysisComplete={handleAnalysisReady}
+                          />
+                        )
                       )}
                     </div>
                   </ErrorBoundary>
