@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, MicOff, Sparkles, Check, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { Mic, MicOff, Sparkles, Check, RefreshCw, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const SAMPLE_RAW_TEXTS = [
   {
@@ -31,6 +33,64 @@ const SAMPLE_RAW_TEXTS = [
   }
 ];
 
+// ──────────────────────────────────────────────────────
+// Web Speech API helpers
+// ──────────────────────────────────────────────────────
+const SpeechRecognition =
+  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+const isSpeechSupported = !!SpeechRecognition;
+
+// ──────────────────────────────────────────────────────
+// AI cleanup via backend Mistral LLM
+// ──────────────────────────────────────────────────────
+async function cleanupWithAI(rawText: string): Promise<{
+  summary: string;
+  actionItems: string[];
+  keyDecision: string;
+}> {
+  const prompt =
+    `You are an expert executive assistant. Given the following raw, unedited speech dictation, produce a JSON object with exactly three fields:\n` +
+    `1. "summary" — a single-sentence executive summary\n` +
+    `2. "actionItems" — an array of 2-5 concise action item strings\n` +
+    `3. "keyDecision" — a single sentence describing the primary decision or conclusion\n\n` +
+    `Remove all filler words (umm, like, basically, you know, etc.), fix grammar, and distill the core message.\n\n` +
+    `Raw dictation:\n"""${rawText}"""\n\n` +
+    `Respond ONLY with the JSON object, no markdown fences, no explanation.`;
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: prompt }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend returned ${response.status}`);
+  }
+
+  const data = await response.json();
+  const answer: string = data.answer || data.text || '';
+
+  // Try to parse JSON from the LLM response
+  try {
+    // Strip possible markdown fences
+    const jsonStr = answer.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    return {
+      summary: parsed.summary || 'Summary unavailable.',
+      actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems : ['No action items extracted.'],
+      keyDecision: parsed.keyDecision || 'No key decision extracted.',
+    };
+  } catch {
+    // Fallback: treat the whole response as a summary
+    return {
+      summary: answer.slice(0, 300),
+      actionItems: ['Review the AI output for detailed action items.'],
+      keyDecision: 'See summary above for the key conclusion.',
+    };
+  }
+}
+
 export const DictationPlayground: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [customText, setCustomText] = useState("");
@@ -39,6 +99,11 @@ export const DictationPlayground: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [customResult, setCustomResult] = useState<any>(null);
   const [showPlayground, setShowPlayground] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
+
+  const recognitionRef = useRef<any>(null);
 
   // WPM Counter animation
   const [keyboardWpm, setKeyboardWpm] = useState(0);
@@ -63,33 +128,123 @@ export const DictationPlayground: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // ── Real Microphone Recording via Web Speech API ──
+  const startRecording = useCallback(() => {
+    setMicError(null);
+    setLiveTranscript("");
+
+    if (!isSpeechSupported) {
+      setMicError("Your browser doesn't support speech recognition. Try Chrome or Edge.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      let finalTranscript = '';
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interim += transcript;
+          }
+        }
+        const combined = (finalTranscript + interim).trim();
+        setLiveTranscript(combined);
+        setCustomText(combined);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          setMicError("Microphone access denied. Please allow mic permission and try again.");
+        } else if (event.error === 'no-speech') {
+          setMicError("No speech detected. Please speak clearly and try again.");
+        } else {
+          setMicError(`Speech recognition error: ${event.error}`);
+        }
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        // Finalize: commit whatever was collected
+        if (finalTranscript.trim()) {
+          setCustomText(finalTranscript.trim());
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      setIsRecording(true);
+      setCustomResult(null);
+    } catch (err: any) {
+      setMicError(`Failed to start recording: ${err.message}`);
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsRecording(false);
+  }, []);
+
   const handleRecordToggle = () => {
     if (isRecording) {
-      setIsRecording(false);
+      stopRecording();
     } else {
-      setIsRecording(true);
-      setTimeout(() => {
-        setIsRecording(false);
-        setCustomText("Umm so basically we need to check if the video transcription pipeline works properly with Hinglish audio clips and output bullet points.");
-      }, 3000);
+      startRecording();
     }
   };
 
-  const handleCleanUpCustom = () => {
-    if (!customText.trim()) return;
+  // ── AI-powered cleanup (calls backend, falls back to simulation) ──
+  const handleCleanUpCustom = async () => {
+    const text = customText.trim() || SAMPLE_RAW_TEXTS[selectedIndex].raw;
+    if (!text) return;
+    
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+    setCleanupError(null);
+
+    try {
+      const result = await cleanupWithAI(text);
+      setCustomResult(result);
+    } catch (err: any) {
+      console.warn("Backend AI cleanup failed, using local fallback:", err.message);
+      setCleanupError("Backend unavailable — showing local AI simulation.");
+      // Fallback: simple local cleanup simulation
+      const words = text.split(/\s+/);
+      const fillers = ['umm', 'um', 'uh', 'like', 'basically', 'so', 'yeah', 'you', 'know'];
+      const cleaned = words.filter(w => !fillers.includes(w.toLowerCase().replace(/[,.!?]/g, ''))).join(' ');
       setCustomResult({
-        summary: "Evaluate video transcription pipeline compatibility with Hinglish audio sources and verify structured bullet point output.",
+        summary: cleaned.length > 200 ? cleaned.slice(0, 200) + '...' : cleaned,
         actionItems: [
-          "Test Hinglish speech recognition accuracy.",
-          "Verify formatting of extracted takeaways and action items."
+          "Review the cleaned transcript above.",
+          "Start the backend server for full AI-powered cleanup."
         ],
-        keyDecision: "Ensure dual-language (English & Hinglish) support in production pipeline."
+        keyDecision: "Connect to the backend API for production-grade AI dictation cleanup."
       });
-    }, 1200);
+    } finally {
+      setIsProcessing(false);
+    }
   };
+
+  // Cleanup recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   const sample = SAMPLE_RAW_TEXTS[selectedIndex];
   const currentResult = customResult || sample.polished;
@@ -255,6 +410,8 @@ export const DictationPlayground: React.FC = () => {
                     onClick={() => {
                       setSelectedIndex(idx);
                       setCustomResult(null);
+                      setCustomText("");
+                      setCleanupError(null);
                     }}
                     className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                       selectedIndex === idx && !customResult
@@ -267,6 +424,24 @@ export const DictationPlayground: React.FC = () => {
                 ))}
               </div>
 
+              {/* Mic Error Alert */}
+              {micError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/20 border border-red-400/30 text-red-200 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{micError}</span>
+                  <button onClick={() => setMicError(null)} className="ml-auto text-red-300 hover:text-white text-xs">✕</button>
+                </div>
+              )}
+
+              {/* Cleanup Error Alert */}
+              {cleanupError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/20 border border-amber-400/30 text-amber-200 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{cleanupError}</span>
+                  <button onClick={() => setCleanupError(null)} className="ml-auto text-amber-300 hover:text-white text-xs">✕</button>
+                </div>
+              )}
+
               {/* Two-Column Comparison Card */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 items-stretch">
                 {/* Left Column: Raw Input */}
@@ -276,9 +451,17 @@ export const DictationPlayground: React.FC = () => {
                       <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
                         Raw Transcript
                       </span>
-                      <span className="text-[10px] text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-900 shrink-0">
-                        Filler Phrases Included
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {isRecording && (
+                          <span className="flex items-center gap-1.5 text-[10px] text-red-300 bg-red-950/40 px-2 py-0.5 rounded border border-red-900 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            LIVE
+                          </span>
+                        )}
+                        <span className="text-[10px] text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-900 shrink-0">
+                          {customText ? "Your Dictation" : "Filler Phrases Included"}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-4">
@@ -287,10 +470,12 @@ export const DictationPlayground: React.FC = () => {
                         onChange={(e) => {
                           setCustomText(e.target.value);
                           setCustomResult(null);
+                          setCleanupError(null);
                         }}
                         rows={6}
                         className="w-full bg-black/30 p-3.5 sm:p-4 rounded-2xl border border-white/10 text-xs leading-relaxed text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#D9CCF5] resize-none font-mono"
-                        placeholder="Type raw dictation or speak..."
+                        placeholder="Type raw dictation, speak into your mic, or select a preset..."
+                        disabled={isRecording}
                       />
                     </div>
                   </div>
@@ -306,12 +491,12 @@ export const DictationPlayground: React.FC = () => {
                       }`}
                     >
                       {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-red-400" />}
-                      <span>{isRecording ? "Recording..." : "Simulate Mic"}</span>
+                      <span>{isRecording ? "Stop Recording" : (isSpeechSupported ? "Record Mic" : "Mic Not Supported")}</span>
                     </button>
 
                     <button
                       onClick={handleCleanUpCustom}
-                      disabled={isProcessing}
+                      disabled={isProcessing || isRecording}
                       className="flex items-center gap-2 px-4 sm:px-5 py-2 rounded-xl bg-white text-black text-xs font-bold hover:bg-emerald-100 transition-all shadow-xs disabled:opacity-50"
                     >
                       {isProcessing ? (
@@ -319,7 +504,7 @@ export const DictationPlayground: React.FC = () => {
                       ) : (
                         <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                       )}
-                      <span>Cleanup Speech</span>
+                      <span>{isProcessing ? "AI Processing..." : "AI Cleanup"}</span>
                     </button>
                   </div>
                 </div>
@@ -361,11 +546,21 @@ export const DictationPlayground: React.FC = () => {
                         ))}
                       </ul>
                     </div>
+
+                    {/* Key Decision */}
+                    {currentResult.keyDecision && (
+                      <div className="mt-3 p-3.5 sm:p-4 rounded-xl bg-white border border-black/5">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#8A8A8A] mb-1">Key Decision</h4>
+                        <p className="text-xs font-medium text-[#1A1A1A] leading-relaxed">
+                          {currentResult.keyDecision}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-black/10 flex items-center justify-between text-[10px] text-[#8A8A8A]">
-                    <span>Latency: ~1.2s</span>
-                    <span className="font-semibold text-emerald-600">Accuracy Optimized</span>
+                    <span>{customResult ? "Powered by Mistral AI" : "Preset Example"}</span>
+                    <span className="font-semibold text-emerald-600">{customResult ? "Live AI Result" : "Accuracy Optimized"}</span>
                   </div>
                 </div>
               </div>

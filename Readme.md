@@ -1,303 +1,548 @@
 <div align="center">
 
-# 🎬 videoQuery • AI Video Agent
-### Intelligent Multi-Modal Video, Audio & Document Intelligence Platform
+# 🎬 AI Video Agent
 
-**Transform YouTube videos, audio recordings, and PDF documents into structured transcripts, executive summaries, and interactive RAG-powered conversations.**
+### Transform any video, audio, or document into searchable knowledge — instantly.
 
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
-[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
-[![Clerk](https://img.shields.io/badge/Clerk-Authentication-6C47FF?style=for-the-badge&logo=clerk&logoColor=white)](https://clerk.com)
-[![Whisper](https://img.shields.io/badge/OpenAI-Whisper-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/whisper)
-[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-FF6F61?style=for-the-badge)](https://www.trychroma.com)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org)
+[![Whisper](https://img.shields.io/badge/Whisper-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/whisper)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-FF6F00?style=for-the-badge&logo=databricks&logoColor=white)](https://www.trychroma.com)
+[![Mistral AI](https://img.shields.io/badge/Mistral_AI-5A67D8?style=for-the-badge&logo=ai&logoColor=white)](https://mistral.ai)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
 
-[Explore Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Environment Setup](#-configuration) • [Documentation](#-documentation)
+[Live Demo](#-quick-start) · [Architecture](#-architecture) · [API Docs](#-api-reference) · [Roadmap](#-feature-roadmap)
 
 </div>
 
 ---
 
-## 🌟 Overview
+## 📋 Table of Contents
 
-**videoQuery (AI Video Agent)** is a full-stack, enterprise-grade multi-modal AI platform designed to eliminate hours of manual note-taking and video reviews. By pairing local speech-to-text models with modern vector search and Large Language Models, videoQuery transcribes media in seconds, indexes knowledge into ChromaDB, and allows users to converse directly with video or document content using Retrieval-Augmented Generation (RAG).
+- [Overview](#-overview)
+- [Feature Roadmap](#-feature-roadmap--future-ideas)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Quick Start](#-quick-start)
+- [Environment Variables](#-environment-variables)
+- [API Reference](#-api-reference)
+- [Frontend](#-frontend)
+- [Docker Deployment](#-docker-deployment)
+- [Testing](#-testing)
+- [Project Structure](#-project-structure)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
-## ✨ Key Features
+## 🧠 Overview
 
-### 🎥 Multi-Format Media Ingestion
-- **YouTube Ingestion**: Download and extract high-bitrate audio directly from YouTube links via `yt-dlp`.
-- **Local Audio/Video Upload**: Supports MP3, MP4, WAV, M4A, FLAC, OGG, AAC, MOV, MKV, WebM, and AVI (up to 500MB).
-- **PDF Document Processing**: Upload whitepapers, research articles, or meeting decks for automated text extraction and vector indexing.
+**AI Video Agent** is a full-stack, production-ready application that transforms YouTube videos, audio files, PDF documents, and live voice dictation into structured, searchable knowledge using a **RAG (Retrieval-Augmented Generation)** pipeline.
 
-### 🎙️ Dual-Engine Speech-to-Text
-- **OpenAI Whisper (Local)**: High-accuracy transcription running on CPU or NVIDIA CUDA GPU (`tiny`, `base`, `small`, `medium`, `large-v3`).
-- **Sarvam AI Engine**: State-of-the-art Hindi and Hinglish (code-switched speech) transcription for bilingual audio.
+### What It Does
 
-### 🧠 Intelligent Vector RAG Engine
-- **Query Routing**: Automatically classifies queries into `LOCAL_QA` (specific timestamps/sections), `GLOBAL_SUMMARY` (macro insights), or `TOPIC_EXTRACTION`.
-- **ChromaDB Integration**: Local high-speed vector embeddings generated via `sentence-transformers/all-MiniLM-L6-v2`.
-- **Executive Synthesis**: Powered by Mistral AI (`mistral-small-latest`) to generate summaries, action items, key decisions, and timestamped answers.
+| Input | Processing | Output |
+|-------|-----------|--------|
+| 🎥 YouTube URLs | Download → Audio extraction → STT | Indexed transcript |
+| 🎙️ Audio files (MP3/WAV/M4A/FLAC/OGG/AAC) | Chunking → STT → Embedding | Searchable vector DB |
+| 📹 Video files (MP4/AVI/MOV/MKV/WebM) | Audio extraction → STT → Embedding | Structured summaries |
+| 📄 PDF documents | Text extraction → Embedding | Action items & Q&A |
+| 🎤 Live voice dictation | Browser Speech API → AI cleanup | Clean executive prose |
 
-### 🔐 Clerk Authentication & Studio Security
-- **Protected Video Studio**: Access to media analyzers is guarded by Clerk authentication.
-- **Project-Themed UI**: Beautiful authentication videoQuerys customized with the project's cream (`#FDFCF0`) and lavender (`#D9CCF5`) design tokens.
-- **Top Navigation User Button**: Seamless profile management and sign-out controls built directly into the header.
+### How It Works
 
-### 📱 Premium, Fully Responsive UX
-- **Fluid Design System**: Baskervville editorial serif typography combined with Inter body text and dynamic soundwave animations.
-- **Dictation Playground**: Live benchmark simulation showing 120x speedup over manual video review.
-- **Mobile-First Responsive Layout**: Optimized across smartphones, tablets, laptops, and ultra-wide displays.
+```
+User Input ──► Ingestion Pipeline (no LLM) ──► Vector Store (ChromaDB)
+                                                       │
+User Question ──► RAG Retrieval ──► Mistral LLM ──► Answer
+```
+
+> **Key Design Principle**: LLM is **never** used during content ingestion. It's only invoked when the user asks a question — keeping ingestion fast and cost-effective.
+
+---
+
+## 🚀 Feature Roadmap & Future Ideas
+
+### ✅ Existing Features
+
+| Feature | Description |
+|---------|-------------|
+| 🎥 YouTube Analysis | Paste any YouTube URL to auto-download, transcribe, and index |
+| 📁 File Upload | Drag-and-drop support for 12+ audio/video/document formats |
+| 🗣️ Dual STT Engines | **Faster Whisper** (local, 4-8x faster) + **Sarvam AI** (Hindi/Hinglish) |
+| 📄 PDF Ingestion | Extract text from PDFs with metadata-aware chunking |
+| 🔍 Hybrid RAG Search | Dense vector search (ChromaDB) + sparse BM25 + cross-encoder reranking |
+| 💬 Interactive Chat | Real-time Q&A with conversation memory and intelligent query routing |
+| 🧹 Dictation Lab | Live mic recording with AI-powered text cleanup via Mistral LLM |
+| 📊 Smart Query Routing | Auto-detects "summarize" vs. "specific question" vs. "extraction" intent |
+| 🌐 Multilingual | English + Hinglish (Hindi-English code-switching) support |
+| 🔐 Authentication | Clerk-based frontend auth + Supabase JWT backend validation |
+| ☁️ Cloud Storage | Optional Supabase cloud storage for uploaded files and results |
+| 🐳 Docker Ready | Multi-stage Dockerfile + docker-compose with health checks |
+| ⚡ SSE Progress | Real-time Server-Sent Events for long-running analysis jobs |
+| 🧪 Test Suite | pytest-based backend tests with coverage |
+
+### 🔮 Features You Can Add
+
+Below are high-impact features that naturally extend the current architecture, ordered by implementation difficulty:
+
+#### 🟢 Easy (1-3 days)
+
+| Feature | Description | Where to Start |
+|---------|-------------|----------------|
+| 📝 **Transcript Export** | Export transcripts as SRT/VTT subtitles, DOCX, or plain text | Add export endpoint in `api/routes/analysis.py`, generate subtitle format from timestamped chunks |
+| 🌙 **Dark Mode Toggle** | Full dark/light theme switching for the frontend | Add theme context in `frontend/src/contexts/`, toggle in `Header.tsx` |
+| 📌 **Bookmark Answers** | Let users pin/bookmark important chat answers for later reference | Add a bookmarks array in `InteractiveChat.tsx`, persist to localStorage |
+| 🔔 **Email Notifications** | Notify users via email when long analysis jobs complete | Add a notifications service in `core/`, use SendGrid or Resend SDK |
+| 📋 **Copy Transcript** | One-click copy of the full transcript from the analysis result | Add a copy button in `AnalysisResultCard.tsx` |
+| 🏷️ **Custom Tags & Labels** | Let users tag analyses with labels (e.g., "Meeting", "Lecture") | Add tags field in `AnalysisResultCard`, persist in Supabase |
+
+#### 🟡 Medium (3-7 days)
+
+| Feature | Description | Where to Start |
+|---------|-------------|----------------|
+| ⏱️ **Timestamp Navigation** | Click on specific timestamps in transcript to jump to that moment | Modify `core/transcriber.py` to output word-level timestamps, render clickable spans |
+| 🗂️ **Analysis History Dashboard** | Persistent history of all past analyses with search/filter | Create new `AnalysisHistory.tsx` component, new Supabase table, API endpoints in `api/routes/` |
+| 🔄 **Real-time Collaboration** | Multiple users can chat about the same document simultaneously | Add WebSocket support via `fastapi-websockets`, shared session rooms |
+| 🌍 **Multi-Language Expansion** | Add Spanish, French, German, Japanese, etc. via Whisper lang codes | Extend `core/stt_service.py` language routing, add UI language dropdown |
+| 📊 **Analytics Dashboard** | Show usage stats: videos processed, questions asked, avg response time | Add metrics middleware in `api/main.py`, create `AnalyticsDashboard.tsx` |
+| 🔗 **Share Analysis Links** | Generate shareable public/private links for analysis results | Add share token generation in backend, public view route in frontend |
+| 🎯 **Speaker Diarization** | Identify who said what in multi-speaker recordings | Integrate `pyannote-audio` or `NeMo` in `core/stt_service.py`, label chunks per speaker |
+| 📰 **Automated Meeting Minutes** | Auto-generate structured meeting minutes with attendees, decisions, next steps | New `core/minutes_generator.py` using RAG retrieval + structured LLM prompts |
+
+#### 🔴 Advanced (1-2 weeks+)
+
+| Feature | Description | Where to Start |
+|---------|-------------|----------------|
+| 🎥 **Video Frame Analysis** | Extract and analyze key frames/slides from video using vision models | Add `core/vision_service.py` with GPT-4V or LLaVA, extract frames with ffmpeg |
+| 📡 **Live Stream Ingestion** | Process live YouTube streams or Zoom calls in real-time | Add streaming pipeline in `core/audio_pipeline.py` with chunked processing |
+| 🤖 **Multi-Model LLM Support** | Switch between GPT-4, Claude, Gemini, Llama alongside Mistral | Abstract `core/llm_service.py` to support multiple providers via LiteLLM |
+| 🧩 **Plugin System** | Let users install custom analysis plugins (sentiment analysis, entity extraction, etc.) | Create `core/plugins/` directory with plugin registry and hooks |
+| 📱 **Mobile App** | React Native or Flutter companion app with offline mode | Separate mobile project consuming the existing FastAPI backend |
+| 🔌 **Slack/Teams Integration** | Bot that auto-summarizes meeting recordings posted in channels | Add `integrations/slack_bot.py` using Slack Bolt SDK |
+| 🧬 **Knowledge Graph** | Build entity relationship graphs from analyzed content | Add `core/knowledge_graph.py` using Neo4j or NetworkX |
+| 🎓 **Quiz Generator** | Auto-generate quizzes from educational video content | New `core/quiz_service.py` that uses RAG + structured LLM output |
+| 🔐 **Role-Based Access Control** | Admin/viewer/editor roles with granular permissions per analysis | Extend `core/auth_middleware.py` with role hierarchy |
+| 📈 **Batch Processing** | Upload a folder of 50+ files and process them all with a single click | Add batch queue in `api/routes/analysis.py`, use Celery or `asyncio.TaskGroup` |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-                    ┌───────────────────────────────────┐
-                    │      React 18 + Vite Frontend     │
-                    │  (Tailwind CSS + Clerk Auth SDK)  │
-                    └─────────────────┬─────────────────┘
-                                      │ REST API / JSON
-                                      ▼
-                    ┌───────────────────────────────────┐
-                    │       FastAPI Backend Server      │
-                    │      (Input Validation & CORS)    │
-                    └───────┬───────────────────┬───────┘
-                            │                   │
-             Media Ingest   ▼                   ▼   Documents
-    ┌───────────────────────────────┐   ┌───────────────────────────────┐
-    │       Audio / Video Engine    │   │         PDF Processor         │
-    │  - yt-dlp (YouTube stream)    │   │  - PyPDF2 text extraction     │
-    │  - FFmpeg (16kHz mono audio)  │   │  - Page-level segmentation    │
-    │  - OpenAI Whisper / Sarvam AI │   └───────────────┬───────────────┘
-    └───────────────┬───────────────┘                   │
-                    │                                   │
-                    ▼                                   ▼
-    ┌ ────────────────┐
-    │              Chunking & ChromaDB Vector Store                     │
-    │     (sentence-transformers/all-MiniLM-L6-v2 Embeddings)           │
-    └─────────────────────────────────┬─────────────────────────────────┘
-                                      │
-                                      ▼
-    ┌ ────────────────┐
-    │               RAG Engine & Intelligent Query Router               │
-    │      - LOCAL_QA (Top-8 Vector Chunk Retrieval)                    │
-    │      - GLOBAL_SUMMARY (Precomputed Macro Metadata)                │
-    │      - LLM Synthesis via Mistral AI                               │
-    └─────────────────────────────────┬─────────────────────────────────┘
-                                      │
-                                      ▼
-                    ┌───────────────────────────────────┐
-                    │   Interactive Streaming Q&A Chat  │
-                    └───────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     FRONTEND (React + Vite)                  │
+│  ┌──────────┐ ┌─────────────┐ ┌──────────┐ ┌─────────────┐  │
+│  │WisprHero │ │AudioVideo   │ │PDF       │ │Interactive  │  │
+│  │  (Home)  │ │ Analyzer    │ │Analyzer  │ │   Chat      │  │
+│  └──────────┘ └─────────────┘ └──────────┘ └─────────────┘  │
+│  ┌──────────────────┐  ┌─────────────┐  ┌────────────────┐  │
+│  │DictationPlayground│  │FeatureShow │  │ AuthPage       │  │
+│  │  (Live Mic+AI)   │  │   case     │  │ (Clerk Auth)   │  │
+│  └──────────────────┘  └─────────────┘  └────────────────┘  │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ HTTP / SSE
+┌──────────────────────────▼───────────────────────────────────┐
+│                    BACKEND (FastAPI)                          │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+│  │ /api/v1/    │  │ /api/v1/chat │  │ /api/v1/upload    │   │
+│  │   analyze   │  │              │  │                   │   │
+│  └──────┬──────┘  └──────┬───────┘  └────────┬──────────┘   │
+│         │                │                    │              │
+│  ┌──────▼──────────────────────────────────────▼──────────┐  │
+│  │                PIPELINE ORCHESTRATOR                    │  │
+│  │  Source Detection → Ingestion → Validation → RAG Index │  │
+│  └──────┬──────────────────┬──────────────────┬──────────┘  │
+│         │                  │                  │              │
+│  ┌──────▼─────┐  ┌────────▼───────┐  ┌──────▼──────────┐  │
+│  │ STT Service│  │ PDF Pipeline   │  │ RAG Engine      │  │
+│  │ (Whisper / │  │ (PyPDF2)       │  │ (ChromaDB +     │  │
+│  │  Sarvam)   │  │                │  │  BM25 + Rerank) │  │
+│  └────────────┘  └────────────────┘  └──────┬──────────┘  │
+│                                              │              │
+│                                    ┌─────────▼──────────┐   │
+│                                    │  LLM Service       │   │
+│                                    │  (Mistral AI)      │   │
+│                                    │  Lazy Init on Query│   │
+│                                    └────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+### Pipeline Flow
+
+1. **Ingestion** (No LLM) — Content is downloaded/extracted and transcribed
+2. **Indexing** (No LLM) — Text is chunked, embedded, and stored in ChromaDB
+3. **Querying** (LLM used) — User questions trigger RAG retrieval → Mistral LLM answers
 
 ---
 
-## 📁 Project Structure
+## 🛠️ Tech Stack
 
-```
-AI Video Agent/
-├── api/                       # FastAPI routes, schemas, and endpoints
-│   ├── main.py                # Server entrypoint and CORS middleware
-│   └── routes/                # Endpoint handlers (analysis, chat, health)
-├── core/                      # Application core logic & AI services
-│   ├── transcriber.py         # Whisper & Sarvam AI transcription
-│   ├── rag_engine.py          # Vector retrieval and query router
-│   ├── vector_store.py        # ChromaDB embeddings manager
-│   ├── global_metadata.py     # Macro summaries and concept storage
-│   ├── global_analyzer.py     # Hierarchical map-reduce analyzer
-│   ├── pdf_processor.py       # PDF document parser
-│   ├── supabase_client.py     # Optional cloud storage client
-│   └── validators.py          # Security & file sanity checks
-├── frontend/                  # Modern React + Vite application
-│   ├── src/
-│   │   ├── components/        # UI components (Header, Studio, Chat, Auth)
-│   │   ├── contexts/          # State and auth context providers
-│   │   ├── lib/               # Clerk & Supabase configurations
-│   │   ├── types/             # TypeScript interface definitions
-│   │   ├── App.tsx            # Main application router and state
-│   │   └── index.css          # Design system, animations & utilities
-│   ├── package.json           # Frontend dependencies
-│   ├── vite.config.ts         # Vite bundler configuration
-│   └── tailwind.config.js     # Tailwind CSS theme extension
-├── docs/                      # Technical feature guides & SQL schemas
-│   ├── ARCHITECTURE_DIAGRAM.md
-│   ├── ENHANCED_RAG_GUIDE.md
-│   ├── FILE_UPLOAD_FEATURE.md
-│   ├── PDF_SUPPORT_GUIDE.md
-│   ├── SUPABASE_SETUP_GUIDE.md
-│   ├── YOUTUBE_DOWNLOAD_TROUBLESHOOTING.md
-│   └── supabase_setup.sql
-├── tests/                     # Automated Pytest test suite
-│   ├── test_api.py
-│   ├── test_validators.py
-│   └── conftest.py
-├── requirements.txt           # Python backend dependencies
-├── .env.example               # Root environment variable template
-└── README.md                  # Project documentation
-```
+### Backend
+| Technology | Purpose |
+|-----------|---------|
+| **FastAPI** | Async REST API with auto-docs, SSE streaming |
+| **faster-whisper** | CTranslate2-optimized local speech-to-text (4-8x faster) |
+| **Sarvam AI** | Hindi/Hinglish speech-to-text API |
+| **Mistral AI** | LLM for question answering and text analysis |
+| **ChromaDB** | Vector database for semantic search |
+| **sentence-transformers** | `all-MiniLM-L6-v2` embedding model |
+| **rank-bm25** | Sparse retrieval for hybrid search |
+| **LangChain** | LLM orchestration and prompt management |
+| **yt-dlp** | YouTube video/audio downloader |
+| **PyPDF2** | PDF text extraction |
+| **Supabase** | Auth (JWT), cloud storage, PostgreSQL |
+
+### Frontend
+| Technology | Purpose |
+|-----------|---------|
+| **React 18** | UI framework with TypeScript |
+| **Vite** | Lightning-fast build tooling |
+| **TailwindCSS** | Utility-first styling |
+| **Framer Motion** | Animations and transitions |
+| **Clerk** | Authentication provider |
+| **Lucide React** | Icon library |
+| **React Markdown** | Markdown rendering in chat |
 
 ---
 
-## 🚀 Quick Start
+## ⚡ Quick Start
 
 ### Prerequisites
-- **Python**: Version `3.9` or higher
-- **Node.js**: Version `18.x` or higher
-- **FFmpeg**: Required for audio normalization and video slicing ([Download FFmpeg](https://ffmpeg.org/download.html))
 
----
+- **Python 3.11+**
+- **Node.js 18+**
+- **FFmpeg** (for audio processing)
+- **Mistral AI API Key** ([get one here](https://console.mistral.ai/))
 
-### Step 1: Clone the Repository
+### 1. Clone the Repository
+
 ```bash
 git clone https://github.com/Harsh-Upadhyay005/AI-Video-Agent.git
-cd "AI Video Agent"
+cd AI-Video-Agent
 ```
 
----
-
-### Step 2: Set Up Backend Environment
+### 2. Backend Setup
 
 ```bash
-# Create and activate Python virtual environment
+# Create virtual environment
 python -m venv .venv
 
+# Activate it
 # Windows:
 .venv\Scripts\activate
-
-# Linux / macOS:
+# macOS/Linux:
 source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-Create your `.env` file from the template:
+### 3. Configure Environment
+
 ```bash
+# Copy example env file
 cp .env.example .env
+
+# Edit .env and add your API keys:
+# MISTRAL_API_KEY=your_key_here       (required)
+# SARVAM_API_KEY=your_key_here        (optional, for Hinglish)
 ```
 
----
+### 4. Start Backend Server
 
-### Step 3: Set Up Frontend & Clerk Auth
+```bash
+# Using uvicorn directly
+python -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Or using the start script (Windows)
+start.bat
+```
+
+The API will be available at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`.
+
+### 5. Frontend Setup
 
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
-```
 
-Create your `frontend/.env` file:
-```bash
+# Copy example env
 cp .env.example .env
-```
+# Edit frontend/.env:
+# VITE_API_URL=http://localhost:8000
+# VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_key_here
 
-Add your Clerk publishable key from your [Clerk Dashboard](https://dashboard.clerk.com):
-```env
-VITE_API_URL=http://localhost:8000
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key_here
-```
-
----
-
-### Step 4: Run the Application
-
-#### Terminal 1 — Start FastAPI Backend:
-```bash
-# In the project root (with .venv active)
-python -m uvicorn api.main:app --reload --port 8000
-```
-*API will be live at `http://localhost:8000` (Interactive Swagger Docs at `http://localhost:8000/docs`).*
-
-#### Terminal 2 — Start React Frontend:
-```bash
-cd frontend
+# Start dev server
 npm run dev
 ```
-*Frontend will launch at `http://localhost:5173`.*
+
+The frontend will be available at `http://localhost:5173`.
 
 ---
 
-## ⚙️ Configuration Reference
+## 🔐 Environment Variables
 
-### Backend (`.env`)
-| Variable | Required | Description | Default |
-|:---|:---:|:---|:---|
-| `MISTRAL_API_KEY` | **Yes** | API key from [Mistral AI Console](https://console.mistral.ai/) | — |
-| `MISTRAL_MODEL` | No | LLM model name | `mistral-small-latest` |
-| `WHISPER_MODEL` | No | Whisper model size (`tiny`, `base`, `small`, `medium`, `large-v3`) | `small` |
-| `WHISPER_DEVICE` | No | Execution device (`auto`, `cpu`, `cuda`) | `auto` |
-| `WHISPER_COMPUTE_TYPE` | No | Model quantization (`int8`, `float16`, `float32`) | `int8` |
-| `SARVAM_API_KEY` | Optional | API key from [Sarvam AI](https://sarvam.ai/) for Hinglish speech | — |
-| `SUPABASE_URL` | Optional | Supabase project URL for cloud file storage | — |
-| `SUPABASE_ANON_KEY` | Optional | Supabase public anonymous key | — |
-| `MAX_UPLOAD_SIZE_MB` | No | Maximum file upload limit in megabytes | `500` |
+### Backend (`.env` in project root)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `MISTRAL_API_KEY` | ✅ | — | Mistral AI API key for LLM operations |
+| `SARVAM_API_KEY` | ❌ | — | Sarvam AI key (required for Hinglish transcription) |
+| `ENVIRONMENT` | ❌ | `development` | `development` / `staging` / `production` |
+| `WHISPER_MODEL` | ❌ | `small` | Whisper model: `tiny`, `base`, `small`, `medium`, `large` |
+| `WHISPER_DEVICE` | ❌ | `auto` | `auto` / `cpu` / `cuda` |
+| `WHISPER_COMPUTE_TYPE` | ❌ | `int8` | `int8` / `float16` / `float32` |
+| `VECTOR_DB_DIR` | ❌ | `vector_db` | ChromaDB persistence directory |
+| `EMBEDDING_MODEL` | ❌ | `all-MiniLM-L6-v2` | Sentence-transformers embedding model |
+| `MAX_UPLOAD_SIZE_MB` | ❌ | `500` | Maximum upload file size |
+| `CORS_ORIGINS` | ❌ | `localhost:5173` | Comma-separated allowed CORS origins |
+| `LOG_LEVEL` | ❌ | `INFO` | Logging level |
+| `SUPABASE_URL` | ❌ | — | Supabase project URL (for cloud storage) |
+| `SUPABASE_ANON_KEY` | ❌ | — | Supabase anonymous key |
 
 ### Frontend (`frontend/.env`)
-| Variable | Required | Description |
-|:---|:---:|:---|
-| `VITE_API_URL` | **Yes** | Backend FastAPI server URL (`http://localhost:8000`) |
-| `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Publishable key from [Clerk Dashboard](https://dashboard.clerk.com) (`pk_test_...`) |
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VITE_API_URL` | ❌ | `http://localhost:8000` | Backend API URL |
+| `VITE_CLERK_PUBLISHABLE_KEY` | ✅ | — | Clerk authentication key |
+| `VITE_SUPABASE_URL` | ❌ | — | Supabase URL for client-side auth |
+| `VITE_SUPABASE_ANON_KEY` | ❌ | — | Supabase anonymous key |
 
 ---
 
-## 📡 API Endpoints Overview
+## 📡 API Reference
+
+### Analysis Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/analyze` | Start async analysis (returns job_id) | Optional |
+| `POST` | `/api/v1/analyze/sync` | Synchronous analysis (blocks until done) | Optional |
+| `POST` | `/api/v1/upload` | Upload file + start analysis | Optional |
+| `GET` | `/api/v1/progress/{job_id}` | SSE stream of progress updates | No |
+| `GET` | `/api/v1/status/{job_id}` | Poll job status | No |
+
+### Chat Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/chat` | Ask question about analyzed content | Optional |
+| `DELETE` | `/api/v1/chat/session/{id}` | Clear chat session | No |
+| `GET` | `/api/v1/chat/storage/health` | RAG storage health status | No |
+
+### Health & System
 
 | Method | Endpoint | Description |
-|:---|:---|:---|
-| `GET` | `/api/health/ping` | Health check & connectivity probe |
-| `POST` | `/api/v1/analyze` | Start asynchronous analysis for YouTube URL |
-| `GET` | `/api/v1/status/{job_id}` | Poll progress and retrieve completed analysis |
-| `POST` | `/api/v1/upload` | Multipart file upload and analysis (Audio/Video/PDF) |
-| `POST` | `/api/v1/chat` | Send question to vector RAG engine with session context |
-| `DELETE`| `/api/v1/chat/session/{id}` | Clear conversation session cache |
+|--------|----------|-------------|
+| `GET` | `/health` | Basic health check |
+| `GET` | `/health/detailed` | Detailed system health |
+| `GET` | `/` | API info |
+
+### Example: Analyze a YouTube Video
+
+```bash
+curl -X POST http://localhost:8000/api/v1/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"source": "https://youtube.com/watch?v=VIDEO_ID", "language": "english"}'
+```
+
+### Example: Chat with Content
+
+```bash
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the key decisions?", "session_id": "JOB_ID"}'
+```
 
 ---
 
-## 📚 Technical Documentation
+## 🎨 Frontend
 
-Explore detailed documentation in the [`docs/`](docs/) directory:
-- 🏛️ **[System Architecture](docs/ARCHITECTURE_DIAGRAM.md)**: Deep dive into component interaction and data videoQuerys.
-- 🔍 **[Enhanced RAG Guide](docs/ENHANCED_RAG_GUIDE.md)**: Query routing strategies and map-reduce summarization.
-- 📁 **[File Upload Engine](docs/FILE_UPLOAD_FEATURE.md)**: Handling multi-format audio and video processing pipelines.
-- 📄 **[PDF Analysis Guide](docs/PDF_SUPPORT_GUIDE.md)**: Document segmentation and text extraction architecture.
-- ☁️ **[Supabase Cloud Setup](docs/SUPABASE_SETUP_GUIDE.md)**: Setting up permanent cloud storage buckets and metadata schemas.
-- 🛠️ **[YouTube Troubleshooting](docs/YOUTUBE_DOWNLOAD_TROUBLESHOOTING.md)**: Resolving common `yt-dlp` stream extraction errors.
+The frontend is a premium React + Vite SPA with:
+
+### Pages & Components
+
+| Component | Description |
+|-----------|-------------|
+| `WisprHero` | Animated hero section with SVG waveform marquee |
+| `DictationPlayground` | **Live** mic recording (Web Speech API) + AI-powered text cleanup via Mistral |
+| `AudioVideoAnalyzer` | YouTube URL input + drag-and-drop file upload |
+| `PDFAnalyzer` | PDF document upload and analysis |
+| `InteractiveChat` | RAG-powered Q&A with markdown rendering, preset questions |
+| `AnalysisResultCard` | Displays transcript, summary, action items, key decisions |
+| `FeatureShowcase` | Feature grid with icons and descriptions |
+| `AuthPage` | Clerk-powered sign-in/sign-up |
+| `UserProfile` | User profile management with data export |
+
+### Dictation Lab (Now Active! 🎙️)
+
+The Dictation Lab is fully functional:
+
+1. **Click "Record Mic"** — uses the browser's Web Speech API for real-time speech-to-text
+2. **Speak naturally** — your words appear live in the text area (including filler words)
+3. **Click "AI Cleanup"** — sends your raw dictation to the Mistral LLM backend, which returns:
+   - 📝 Executive Summary
+   - ✅ Action Items
+   - 🎯 Key Decision
+4. **Or use presets** — switch between sample dictation texts
+5. **Works offline** — if the backend is down, a local fallback provides basic text cleanup
+
+> **Browser Support**: Chrome, Edge, and Safari support the Speech Recognition API. Firefox has limited support.
+
+---
+
+## 🐳 Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+```bash
+# Build and start
+docker-compose up -d
+
+# View logs
+docker-compose logs -f ai-video-agent
+
+# Stop
+docker-compose down
+```
+
+### Manual Docker Build
+
+```bash
+docker build -t ai-video-agent .
+docker run -p 8000:8000 --env-file .env ai-video-agent
+```
+
+### Resource Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| CPU | 2 cores | 4+ cores |
+| RAM | 2 GB | 4-8 GB |
+| GPU | None (CPU works) | NVIDIA GPU (10-50x faster STT) |
+| Storage | 2 GB | 10+ GB (for models + vector DB) |
 
 ---
 
 ## 🧪 Testing
 
-Run unit and integration tests using pytest:
-
 ```bash
 # Run all tests
 pytest
 
-# Run tests with output verbosity
-pytest -v -s
+# With coverage
+pytest --cov=core --cov=api --cov-report=html
 
-# Run specific validator test
-pytest tests/test_validators.py
+# Run specific test file
+pytest tests/test_api.py -v
+
+# Run with verbose output
+pytest -v --tb=short
 ```
+
+### Test Coverage
+
+| Module | Tests |
+|--------|-------|
+| `test_api.py` | API endpoint integration tests |
+| `test_audio_processor.py` | Audio processing unit tests |
+| `test_config.py` | Configuration validation tests |
+| `test_security.py` | Security module tests |
+| `test_summarizer.py` | Summarization tests |
+| `test_validators.py` | Input validation tests |
+
+---
+
+## 📁 Project Structure
+
+```
+AI-Video-Agent/
+├── api/                          # FastAPI application
+│   ├── main.py                   # App entry, middleware, lifespan
+│   └── routes/
+│       ├── analysis.py           # /analyze, /upload, /progress endpoints
+│       ├── chat.py               # /chat endpoint with RAG
+│       ├── health.py             # Health check endpoints
+│       └── account.py            # Account management
+├── core/                         # Core business logic
+│   ├── audio_pipeline.py         # Audio/video ingestion pipeline
+│   ├── pdf_pipeline.py           # PDF ingestion pipeline
+│   ├── stt_service.py            # Speech-to-text (Whisper + Sarvam)
+│   ├── rag_engine.py             # RAG chain with hybrid search
+│   ├── llm_service.py            # Mistral LLM orchestration
+│   ├── vector_store.py           # ChromaDB + BM25 + reranking
+│   ├── query_router.py           # Intelligent query classification
+│   ├── whole_content_processor.py# Map-reduce summarization
+│   ├── analysis_service.py       # Analysis extraction service
+│   ├── config.py                 # Configuration management
+│   ├── auth_middleware.py        # JWT authentication
+│   ├── security.py               # Security checks
+│   ├── validators.py             # Input validation
+│   ├── reranker.py               # Cross-encoder reranking
+│   ├── mistral_client.py         # Mistral API client with retry
+│   ├── supabase_client.py        # Supabase integration
+│   ├── supabase_database.py      # Database operations
+│   ├── supabase_storage.py       # Cloud file storage
+│   ├── rag_storage.py            # RAG chain persistence
+│   ├── resource_manager.py       # System resource management
+│   ├── health_check.py           # System health monitoring
+│   └── logger.py                 # Structured logging
+├── utils/                        # Utility modules
+│   ├── audio_processor.py        # FFmpeg audio processing
+│   ├── document_chunker.py       # Text chunking strategies
+│   ├── file_manager.py           # File upload management
+│   └── pdf_processor.py          # PDF text extraction
+├── frontend/                     # React + Vite frontend
+│   └── src/
+│       ├── App.tsx               # Main app with routing
+│       ├── api/client.js         # Backend API client (SSE polling)
+│       ├── components/           # UI components (15 files)
+│       ├── contexts/             # Auth context
+│       ├── lib/                  # Clerk + Supabase clients
+│       └── types/                # TypeScript type definitions
+├── tests/                        # Test suite
+├── docs/                         # Documentation
+├── main.py                       # CLI entry point + pipeline orchestrator
+├── requirements.txt              # Python dependencies
+├── Dockerfile                    # Multi-stage production build
+├── docker-compose.yml            # Container orchestration
+├── start.bat                     # Windows start script
+└── .env.example                  # Environment template
+```
+
+---
+
+## 🤝 Contributing
+
+1. **Fork** the repository
+2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
+3. **Commit** your changes: `git commit -m 'Add amazing feature'`
+4. **Push** to the branch: `git push origin feature/amazing-feature`
+5. **Open** a Pull Request
+
+### Development Tips
+
+- Backend auto-reloads with `--reload` flag on uvicorn
+- Frontend auto-reloads with Vite HMR
+- API docs available at `http://localhost:8000/docs` (Swagger) and `http://localhost:8000/redoc`
+- Check `logs/` directory for detailed backend logs
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is open source. See the repository for license details.
 
 ---
 
 <div align="center">
 
-**Built with precision using OpenAI Whisper, Mistral AI, ChromaDB, and React.**
+**Built with ❤️ by [Harsh Upadhyay](https://github.com/Harsh-Upadhyay005)**
 
-⭐ If you find this project helpful, give it a star on GitHub!
+⭐ Star this repo if you find it useful!
 
 </div>
