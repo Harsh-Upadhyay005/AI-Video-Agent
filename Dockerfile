@@ -67,9 +67,8 @@ USER appuser
 EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Default command - can be overridden
-# Single worker: job progress is stored in-process. Multiple workers would drop SSE updates.
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Default command - uses $PORT env var injected by Render, falls back to 8000
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}
