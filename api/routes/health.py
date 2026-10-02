@@ -22,8 +22,7 @@ class HealthResponse(BaseModel):
     checks: Dict[str, Any]
 
 
-@router.get("", response_model=Dict[str, Any])
-@router.get("/", response_model=Dict[str, Any])
+@router.get("/health", response_model=Dict[str, Any])
 async def health_check():
     """
     Lightweight public health endpoint for uptime monitoring.
