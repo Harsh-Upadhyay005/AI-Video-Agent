@@ -53,6 +53,10 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan manager.
     Handles startup and shutdown events.
+    
+    IMPORTANT: Startup errors are logged but never re-raised so that
+    health / ping endpoints remain reachable even when configuration
+    is incomplete (e.g. missing API keys on first deploy).
     """
     # Startup
     logger.info("=" * 80)
@@ -60,14 +64,21 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 80)
     
     try:
-        # Validate environment
+        # Validate environment (non-strict so missing optional vars don't crash the app)
         logger.info("Validating environment variables...")
-        validate_environment(strict=True)
+        try:
+            validate_environment(strict=False)
+        except Exception as env_err:
+            logger.warning(f"Environment validation issue (non-fatal): {env_err}")
         
         # Initialize configuration
         logger.info("Initializing configuration...")
-        config = ConfigManager.initialize()
-        logger.info(f"Running in {config.environment} mode")
+        try:
+            config = ConfigManager.initialize()
+            logger.info(f"Running in {config.environment} mode")
+        except Exception as cfg_err:
+            logger.error(f"Configuration initialization failed (non-fatal): {cfg_err}")
+            logger.warning("Some features may be unavailable until configuration is fixed.")
         
         # Run security check - non-fatal, just log warnings
         logger.info("Running security check...")
@@ -81,8 +92,10 @@ async def lifespan(app: FastAPI):
         logger.info("=" * 80)
         
     except Exception as e:
-        logger.error(f"Failed to start application: {str(e)}")
-        raise
+        # Log but do NOT re-raise – this keeps the server alive so that
+        # /health and /ping remain accessible for monitoring & debugging.
+        logger.error(f"Startup encountered errors (non-fatal): {str(e)}")
+        logger.warning("Server is running in degraded mode. Health endpoints are available.")
     
     yield
     
