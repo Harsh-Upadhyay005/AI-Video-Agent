@@ -106,20 +106,20 @@ class EnvValidator:
         "VECTOR_CHUNK_SIZE": {
             "description": "Vector store chunk size",
             "min": 100,
-            "max": 2000,
-            "default": 500
+            "max": 8000,
+            "default": 3000
         },
         "VECTOR_CHUNK_OVERLAP": {
             "description": "Vector store chunk overlap",
             "min": 0,
-            "max": 500,
-            "default": 50
+            "max": 1000,
+            "default": 300
         },
         "VECTOR_RETRIEVER_K": {
             "description": "Number of documents to retrieve",
             "min": 1,
-            "max": 20,
-            "default": 4
+            "max": 50,
+            "default": 20
         },
         "LOG_MAX_FILE_SIZE_MB": {
             "description": "Maximum log file size in MB",
