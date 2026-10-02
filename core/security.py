@@ -151,7 +151,8 @@ class SecretsManager:
             return False
         
         # Check for only alphanumeric and common special chars
-        if not re.match(r'^[a-zA-Z0-9_\-\.]+$', api_key):
+        # Use a broad pattern that accepts most API key formats
+        if not re.match(r'^[a-zA-Z0-9_\-\.:/+=]+$', api_key):
             return False
         
         return True

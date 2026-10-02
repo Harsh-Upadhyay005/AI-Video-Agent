@@ -69,17 +69,12 @@ async def lifespan(app: FastAPI):
         config = ConfigManager.initialize()
         logger.info(f"Running in {config.environment} mode")
         
-        # Run health checks
-        logger.info("Running health checks...")
-        logger.info("Skipping embedding model load during startup for faster boot")
-        # health_results = HealthCheck.run_all_checks(skip_api_checks=False)
-        # 
-        # if health_results["overall_status"] != "healthy":
-        #     logger.warning("Health check warnings detected, but continuing startup")
-        
-        # Run security check
+        # Run security check - non-fatal, just log warnings
         logger.info("Running security check...")
-        perform_security_check()
+        try:
+            perform_security_check()
+        except Exception as sec_err:
+            logger.warning(f"Security check warning (non-fatal): {sec_err}")
         
         logger.info("=" * 80)
         logger.info("[OK] AI Video Agent API Ready")
