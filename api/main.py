@@ -241,6 +241,22 @@ async def root():
     }
 
 
+@app.get("/health")
+async def simple_health():
+    """Simple health check endpoint at root level."""
+    return {
+        "status": "healthy",
+        "service": "ai-video-agent",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/ping")
+async def ping():
+    """Simple ping endpoint for connectivity tests."""
+    return {"status": "ok", "message": "pong"}
+
+
   
 # Main Entry Point
   
