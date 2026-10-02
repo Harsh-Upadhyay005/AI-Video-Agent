@@ -207,7 +207,12 @@ def transcribe_all(
     progress_callback: Optional[Callable] = None
 ) -> str:
     """
-    Transcribe all audio chunks sequentially.
+    Transcribe all audio chunks with parallel processing for Whisper.
+    
+    Optimizations:
+    - Pre-loads model before parallel execution to avoid lock contention
+    - Uses ThreadPoolExecutor for concurrent chunk transcription (Whisper)
+    - Falls back to sequential for Sarvam (already parallelized internally)
     
     Args:
         chunks: List of audio chunk file paths
@@ -221,15 +226,59 @@ def transcribe_all(
     print(f"[Transcription] Using {engine} for transcription.")
     
     total_chunks = len(chunks)
-    full_transcript = ""
     
-    for i, chunk in enumerate(chunks):
-        print(f"[Transcription] Transcribing chunk {i + 1}/{total_chunks}...")
+    # Single chunk — skip parallelism overhead
+    if total_chunks <= 1:
         if progress_callback:
-            progress_callback("transcribing_chunk", f"{i + 1}/{total_chunks}")
+            progress_callback("transcribing_chunk", "1/1")
+        text = transcribe_chunk(chunks[0], language=language, progress_callback=progress_callback) if chunks else ""
+        if progress_callback:
+            progress_callback("transcription_complete", "All chunks processed")
+        return text.strip()
+    
+    # Pre-load model BEFORE threading to avoid contention
+    if language.lower() != "hinglish":
+        load_model()
+    
+    # For Whisper (local model), transcribe in parallel threads
+    # Sarvam already parallelizes internally, so keep it sequential
+    use_parallel = language.lower() != "hinglish"
+    
+    if use_parallel:
+        import threading
+        completed = [0]
+        lock = threading.Lock()
+        results = {}
         
-        text = transcribe_chunk(chunk, language=language, progress_callback=progress_callback)
-        full_transcript += text + " "
+        def _transcribe_indexed(idx, chunk_path):
+            text = transcribe_chunk(chunk_path, language=language, progress_callback=None)
+            with lock:
+                results[idx] = text
+                completed[0] += 1
+                if progress_callback:
+                    progress_callback("transcribing_chunk", f"{completed[0]}/{total_chunks}")
+        
+        max_workers = min(3, total_chunks)  # Cap at 3 to avoid memory pressure
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(_transcribe_indexed, i, chunk)
+                for i, chunk in enumerate(chunks)
+            ]
+            for future in as_completed(futures):
+                future.result()  # Propagate any exceptions
+        
+        # Reassemble in original order
+        full_transcript = " ".join(results.get(i, "") for i in range(total_chunks))
+    else:
+        # Sequential for Sarvam
+        parts = []
+        for i, chunk in enumerate(chunks):
+            print(f"[Transcription] Transcribing chunk {i + 1}/{total_chunks}...")
+            if progress_callback:
+                progress_callback("transcribing_chunk", f"{i + 1}/{total_chunks}")
+            text = transcribe_chunk(chunk, language=language, progress_callback=progress_callback)
+            parts.append(text)
+        full_transcript = " ".join(parts)
     
     print("[Transcription] Transcription complete.")
     if progress_callback:

@@ -160,6 +160,10 @@ class EnhancedRAGChain:
         # It will be initialized when user asks first question
         self._orchestrator = None
         
+        # Cache the hybrid+reranked retriever (built once, reused across queries)
+        self._cached_retriever = None
+        self._cached_retriever_top_k = None
+        
         # Conversation memory
         self.conversation_history = []
         self.max_history = 5
@@ -178,6 +182,40 @@ class EnhancedRAGChain:
             logger.info("[EnhancedRAG] LLM service ready for queries")
         return self._orchestrator
     
+    def _get_retriever(self, top_k: int = 5):
+        """
+        Get cached hybrid+reranked retriever.
+        Built once and reused across queries to avoid rebuilding BM25 index.
+        
+        Args:
+            top_k: Number of final results after reranking
+            
+        Returns:
+            Cached retriever (hybrid+reranked or dense-only fallback)
+        """
+        if self._cached_retriever is not None and self._cached_retriever_top_k == top_k:
+            return self._cached_retriever
+        
+        custom_retriever = None
+        if self.docs:
+            try:
+                from core.vector_store import get_reranked_retriever
+                logger.info("[EnhancedRAG] Building cached hybrid + reranked retriever")
+                custom_retriever = get_reranked_retriever(
+                    vector_store=self.vector_store,
+                    docs=self.docs,
+                    fetch_k=top_k * 4,
+                    top_n=top_k,
+                    use_hybrid=True
+                )
+            except Exception as e:
+                logger.warning(f"[EnhancedRAG] Failed to create hybrid retriever: {e}")
+                logger.warning("[EnhancedRAG] Falling back to dense-only retrieval")
+        
+        self._cached_retriever = custom_retriever
+        self._cached_retriever_top_k = top_k
+        return custom_retriever
+
     def ask(self, question: str, top_k: int = 5, debug: bool = False) -> Dict[str, Any]:
         """
         Ask a question about the indexed content.
@@ -246,24 +284,8 @@ class EnhancedRAGChain:
                 top_k = router.get_retrieval_k(query_intent)
                 logger.info(f"[EnhancedRAG] Adjusted top_k to {top_k} for extraction query")
             
-            # Create hybrid + reranked retriever if documents available
-            custom_retriever = None
-            if self.docs:
-                try:
-                    from core.vector_store import get_reranked_retriever
-                    logger.info("[EnhancedRAG] Creating hybrid + reranked retriever")
-                    custom_retriever = get_reranked_retriever(
-                        vector_store=self.vector_store,
-                        docs=self.docs,
-                        fetch_k=top_k * 4,  # Fetch 4x for reranking
-                        top_n=top_k,
-                        use_hybrid=True
-                    )
-                except Exception as e:
-                    logger.warning(f"[EnhancedRAG] Failed to create hybrid retriever: {e}")
-                    logger.warning("[EnhancedRAG] Falling back to dense-only retrieval")
-            else:
-                logger.info("[EnhancedRAG] No documents available - using dense-only retrieval")
+            # Use cached retriever (built once, reused)
+            custom_retriever = self._get_retriever(top_k)
             
             result = self.orchestrator.answer_with_retrieval(
                 vector_store=self.vector_store,
