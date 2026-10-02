@@ -2,6 +2,19 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+/**
+ * Get auth token from Supabase session (if available).
+ * Returns null if auth is not configured or user is not logged in.
+ */
+async function _getAuthToken() {
+  try {
+    const { getAuthToken } = await import('../lib/supabase');
+    return await getAuthToken();
+  } catch {
+    return null;
+  }
+}
+
 class APIClient {
   constructor(baseURL = API_BASE_URL) {
     this.baseURL = baseURL;
@@ -10,9 +23,21 @@ class APIClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     
+    // Inject auth token if available
+    let authHeaders = {};
+    try {
+      const token = await _getAuthToken();
+      if (token) {
+        authHeaders['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {
+      // Auth not available — continue as guest
+    }
+
     const config = {
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options.headers,
       },
       ...options,
@@ -133,10 +158,22 @@ class APIClient {
 
     const url = `${this.baseURL}/api/v1/upload`;
 
+    // Get auth token for upload requests too
+    const headers = {};
+    try {
+      const token = await _getAuthToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {
+      // continue
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
+        headers,
       });
 
       const contentType = response.headers.get('content-type');
@@ -247,6 +284,17 @@ class APIClient {
     });
   }
 
+  // Chat History — retrieve past messages for a session
+  async getChatHistory(sessionId) {
+    if (!sessionId) return { messages: [], count: 0 };
+    return this.request(`/api/v1/chat/history/${encodeURIComponent(sessionId)}`);
+  }
+
+  // Chat Sessions — list all sessions for the current user
+  async getChatSessions() {
+    return this.request('/api/v1/chat/sessions');
+  }
+
   async clearChatSession(sessionId) {
     return this.request(`/api/v1/chat/session/${sessionId}`, {
       method: 'DELETE',
@@ -271,3 +319,4 @@ class APIClient {
 }
 
 export default new APIClient();
+

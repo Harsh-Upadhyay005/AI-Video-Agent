@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type React from "react";
-import { MessageSquare, Send, Bot, User, RefreshCw, Copy, Check } from "lucide-react";
+import { MessageSquare, Send, Bot, User, RefreshCw, Copy, Check, History } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AnalysisData, Message } from "../types/analysis";
@@ -40,22 +40,55 @@ export const InteractiveChat: React.FC<InteractiveChatProps> = ({ currentAnalysi
   const [inputQuestion, setInputQuestion] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
 
+  // Load chat history when analysis changes
   useEffect(() => {
     if (currentAnalysis) {
-      setMessages([
-        {
-          id: "init-analysis",
-          sender: "assistant",
-          text: `Loaded analysis for "${currentAnalysis.title}". I'm ready to answer any questions based on the full ${
-            currentAnalysis.type === "pdf" ? "document content" : "transcript"
-          }!`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
+      const initMessage: Message = {
+        id: "init-analysis",
+        sender: "assistant",
+        text: `Loaded analysis for "${currentAnalysis.title}". I'm ready to answer any questions based on the full ${
+          currentAnalysis.type === "pdf" ? "document content" : "transcript"
+        }!`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      // Load past conversation history from backend
+      const sessionId = currentAnalysis.job_id;
+      if (sessionId) {
+        setHistoryLoaded(false);
+        apiClient.getChatHistory(sessionId)
+          .then((data) => {
+            if (data.messages && data.messages.length > 0) {
+              // Convert backend messages to frontend Message format
+              const pastMessages: Message[] = data.messages.map((msg: any, idx: number) => ({
+                id: `history-${idx}`,
+                sender: msg.role === "user" ? "user" : "assistant",
+                text: msg.content,
+                timestamp: msg.created_at
+                  ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : ""
+              }));
+              // Prepend the init message, then past messages
+              setMessages([initMessage, ...pastMessages]);
+            } else {
+              setMessages([initMessage]);
+            }
+            setHistoryLoaded(true);
+          })
+          .catch((err) => {
+            console.warn("Could not load chat history:", err);
+            setMessages([initMessage]);
+            setHistoryLoaded(true);
+          });
+      } else {
+        setMessages([initMessage]);
+        setHistoryLoaded(true);
+      }
     }
   }, [currentAnalysis]);
 
@@ -147,7 +180,14 @@ export const InteractiveChat: React.FC<InteractiveChatProps> = ({ currentAnalysi
               </div>
               <div className="min-w-0">
                 <h4 className="text-xs font-bold text-[#1A1A1A]">AI Assistant</h4>
-                <p className="text-[10px] text-[#8A8A8A] truncate">Vector RAG Engine • Sub-10ms Semantic Search</p>
+                <p className="text-[10px] text-[#8A8A8A] truncate">
+                  Vector RAG Engine • Sub-10ms Semantic Search
+                  {historyLoaded && messages.length > 2 && (
+                    <span className="ml-1 text-[#D9CCF5]">
+                      • <History className="w-2.5 h-2.5 inline" /> History loaded
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
             {currentAnalysis && (

@@ -318,7 +318,12 @@ class STTService:
         progress_callback: Optional[Callable[[str, str], None]] = None
     ) -> str:
         """
-        Transcribe multiple audio chunks and combine.
+        Transcribe multiple audio chunks with parallel processing.
+        
+        Optimizations:
+        - Pre-loads Whisper model before spawning threads
+        - Uses ThreadPoolExecutor (up to 3 workers) for concurrent transcription
+        - Falls back to sequential for non-Whisper providers
         
         Args:
             audio_paths: List of audio file paths
@@ -334,29 +339,51 @@ class STTService:
         if len(audio_paths) == 1:
             return self.transcribe(audio_paths[0], language, progress_callback)
 
-        logger.info(f"[STTService] Transcribing {len(audio_paths)} audio chunks")
-        transcripts = []
+        total = len(audio_paths)
+        logger.info(f"[STTService] Transcribing {total} audio chunks")
         
-        for i, audio_path in enumerate(audio_paths):
-            if progress_callback:
-                progress_callback(
-                    "stt",
-                    f"Transcribing chunk {i+1}/{len(audio_paths)}..."
-                )
-            
-            try:
-                text = self.transcribe(audio_path, language, progress_callback=None)
-                if text:
-                    transcripts.append(text)
-            except Exception as e:
-                logger.error(f"[STTService] Failed to transcribe chunk {i+1}: {e}")
-                continue
+        # Pre-load Whisper model before parallel execution
+        use_whisper = language.lower() not in ['hinglish', 'hindi']
+        if use_whisper:
+            provider = self._get_whisper_provider()
+            provider._load_model()  # Ensure model is loaded before threads start
+        
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        completed_count = [0]
+        lock = threading.Lock()
+        results = {}
+        
+        def _transcribe_indexed(idx: int, path: str):
+            text = self.transcribe(path, language, progress_callback=None)
+            with lock:
+                results[idx] = text
+                completed_count[0] += 1
+                if progress_callback:
+                    progress_callback("stt", f"Transcribing chunk {completed_count[0]}/{total}...")
+        
+        max_workers = min(3, total)
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(_transcribe_indexed, i, path)
+                for i, path in enumerate(audio_paths)
+            ]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error(f"[STTService] Chunk transcription failed: {e}")
+        
+        # Reassemble in original order
+        transcripts = [results[i] for i in range(total) if i in results and results[i]]
         
         combined_transcript = "\n\n".join(transcripts)
         logger.info(f"[STTService] Combined transcript: {len(combined_transcript)} characters")
         
         if progress_callback:
-            progress_callback("stt", f"Transcription complete ({len(audio_paths)} chunks)")
+            progress_callback("stt", f"Transcription complete ({total} chunks)")
         
         return combined_transcript
 
