@@ -100,7 +100,6 @@ export const DictationPlayground: React.FC = () => {
   const [customResult, setCustomResult] = useState<any>(null);
   const [showPlayground, setShowPlayground] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
-  const [liveTranscript, setLiveTranscript] = useState("");
   const [cleanupError, setCleanupError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
@@ -131,7 +130,6 @@ export const DictationPlayground: React.FC = () => {
   // ── Real Microphone Recording via Web Speech API ──
   const startRecording = useCallback(() => {
     setMicError(null);
-    setLiveTranscript("");
 
     if (!isSpeechSupported) {
       setMicError("Your browser doesn't support speech recognition. Try Chrome or Edge.");
@@ -157,7 +155,6 @@ export const DictationPlayground: React.FC = () => {
           }
         }
         const combined = (finalTranscript + interim).trim();
-        setLiveTranscript(combined);
         setCustomText(combined);
       };
 
