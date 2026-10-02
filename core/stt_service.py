@@ -223,6 +223,71 @@ class SarvamSTTProvider:
             raise Exception(f"Sarvam transcription failed: {e}")
 
 
+class GroqSTTProvider:
+    """
+    Groq Whisper STT provider (API-based, ultra-fast Whisper Large v3-turbo).
+    Uses Groq's cloud infrastructure for blazing-fast transcription.
+    """
+    
+    def __init__(self, api_key: str = None, model: str = None):
+        """
+        Initialize Groq STT provider.
+        
+        Args:
+            api_key: Groq API key (defaults to env GROQ_API_KEY)
+            model: Groq Whisper model (defaults to whisper-large-v3-turbo)
+        """
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        self.model = model or os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
+        
+        if not self.api_key:
+            raise ValueError(
+                "GROQ_API_KEY not found. Set it in .env file for Groq Whisper support."
+            )
+        
+        logger.info(f"[GroqSTT] Initialized with model: {self.model}")
+    
+    def transcribe(self, audio_path: str, language: str = "en") -> str:
+        """
+        Transcribe audio using Groq Whisper API.
+        
+        Args:
+            audio_path: Path to audio file
+            language: Language code ('en' for English, 'hi' for Hindi, etc.)
+            
+        Returns:
+            Transcribed text
+        """
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        
+        logger.info(f"[GroqSTT] Transcribing with {self.model}: {Path(audio_path).name}")
+        
+        try:
+            from groq import Groq
+            
+            client = Groq(api_key=self.api_key)
+            
+            with open(audio_path, 'rb') as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    file=(Path(audio_path).name, audio_file.read()),
+                    model=self.model,
+                    language=language if language != "english" else "en",
+                    response_format="text",
+                    temperature=0.0
+                )
+            
+            text = transcription.strip() if isinstance(transcription, str) else transcription.text.strip()
+            logger.info(f"[GroqSTT] Transcribed {len(text)} characters")
+            return text
+            
+        except ImportError:
+            raise ImportError("groq library required. Install with: pip install groq")
+        except Exception as e:
+            logger.error(f"[GroqSTT] Transcription failed: {e}")
+            raise Exception(f"Groq Whisper transcription failed: {e}")
+
+
 class STTService:
     """
     Unified Speech-to-Text service.
@@ -241,8 +306,12 @@ class STTService:
         # Initialize providers
         self.whisper_provider = None
         self.sarvam_provider = None
+        self.groq_provider = None
         
-        logger.info("[STTService] Initialized")
+        # Check which STT provider to use (priority: Groq > Whisper > Sarvam)
+        self.stt_provider_type = os.getenv("STT_PROVIDER", "whisper").lower()
+        
+        logger.info(f"[STTService] Initialized with provider: {self.stt_provider_type}")
     
     def _get_whisper_provider(self) -> WhisperSTTProvider:
         """Lazy initialize Whisper provider."""
@@ -256,6 +325,12 @@ class STTService:
         if self.sarvam_provider is None:
             self.sarvam_provider = SarvamSTTProvider()
         return self.sarvam_provider
+    
+    def _get_groq_provider(self) -> GroqSTTProvider:
+        """Lazy initialize Groq provider."""
+        if self.groq_provider is None:
+            self.groq_provider = GroqSTTProvider()
+        return self.groq_provider
     
     def transcribe(
         self, 
@@ -274,12 +349,34 @@ class STTService:
         Returns:
             Transcribed text
         """
-        logger.info(f"[STTService] Transcribing audio: language={language}")
+        logger.info(f"[STTService] Transcribing audio: language={language}, provider={self.stt_provider_type}")
         
         if progress_callback:
             progress_callback("stt", f"Transcribing audio ({language})...")
         
-        # Route to appropriate provider
+        # Use Groq if configured
+        if self.stt_provider_type == "groq":
+            try:
+                provider = self._get_groq_provider()
+                lang_code = "en" if language.lower() == "english" else language[:2]
+                text = provider.transcribe(audio_path, lang_code)
+                
+                if progress_callback:
+                    progress_callback("stt", "Transcription complete (Groq Whisper)")
+                
+                return text
+            except Exception as e:
+                logger.warning(f"[STTService] Groq failed, falling back to Whisper: {e}")
+                # Fall back to local Whisper
+                provider = self._get_whisper_provider()
+                text = provider.transcribe(audio_path, language)
+                
+                if progress_callback:
+                    progress_callback("stt", "Transcription complete (Whisper fallback)")
+                
+                return text
+        
+        # Route to appropriate provider based on language
         if language.lower() in ['hinglish', 'hindi']:
             # Use Sarvam for Hindi/Hinglish
             try:
@@ -342,9 +439,10 @@ class STTService:
         total = len(audio_paths)
         logger.info(f"[STTService] Transcribing {total} audio chunks")
         
-        # Pre-load Whisper model before parallel execution
-        use_whisper = language.lower() not in ['hinglish', 'hindi']
-        if use_whisper:
+        # Pre-load provider before parallel execution
+        if self.stt_provider_type == "groq":
+            provider = self._get_groq_provider()
+        elif language.lower() not in ['hinglish', 'hindi']:
             provider = self._get_whisper_provider()
             provider._load_model()  # Ensure model is loaded before threads start
         
