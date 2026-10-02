@@ -1,5 +1,6 @@
 """
 RAG-based chat endpoints for querying meeting transcripts.
+Includes conversation memory — messages are persisted per user + session.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -12,6 +13,7 @@ from core.validators import InputValidator
 from core.logger import get_logger
 from core.exceptions import ValidationError
 from core.auth_middleware import get_current_user, AuthUser
+from core.chat_memory import get_chat_memory
 from main import get_rag_chain_for_source
 
 logger = get_logger(__name__)
@@ -116,16 +118,25 @@ async def chat_with_transcript(
                     detail="No transcript available for chat. Please analyze a video/document first."
                 )
         
+        # Persist user message
+        memory = get_chat_memory()
+        memory.save_message(
+            user_id=current_user.id,
+            session_id=session_id or "default",
+            role="user",
+            content=validated_question,
+        )
+        
         # Get answer with intelligent routing (with timeout)
         import asyncio
         
         try:
-            # Run with 60 second timeout
+            # Run with 120 second timeout (increased for complex documents)
             answer_dict = await asyncio.wait_for(
                 asyncio.to_thread(
                     rag_chain.ask, validated_question, 5, debug_mode
                 ),
-                timeout=60.0
+                timeout=120.0
             )
             if isinstance(answer_dict, str):
                 answer_text = answer_dict
@@ -140,6 +151,14 @@ async def chat_with_transcript(
                 sources = []
                 query_type = "unknown"
             
+            # Persist assistant response
+            memory.save_message(
+                user_id=current_user.id,
+                session_id=session_id or "default",
+                role="assistant",
+                content=answer_text,
+            )
+            
             return {
                 "answer": answer_text,
                 "session_id": request.session_id,
@@ -148,7 +167,7 @@ async def chat_with_transcript(
             }
             
         except asyncio.TimeoutError:
-            logger.error("[Chat] Request timed out after 60 seconds")
+            logger.error("[Chat] Request timed out after 120 seconds")
             raise HTTPException(
                 status_code=504,
                 detail="Request timed out. The question may be too complex or the document too large. Try a simpler question."
@@ -167,8 +186,74 @@ async def chat_with_transcript(
         )
 
 
+# ------------------------------------------------------------------ #
+# Chat History Endpoints
+# ------------------------------------------------------------------ #
+
+@router.get("/chat/history/{session_id}")
+async def get_chat_history(
+    session_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+    limit: int = 100
+):
+    """
+    Get chat history for a session.
+    
+    Returns the conversation history for the authenticated user and given session.
+    - **session_id**: The session/job ID
+    - **limit**: Maximum number of messages to return (default 100)
+    """
+    try:
+        memory = get_chat_memory()
+        messages = memory.get_history(
+            user_id=current_user.id,
+            session_id=session_id,
+            limit=limit,
+        )
+        return {
+            "session_id": session_id,
+            "messages": messages,
+            "count": len(messages),
+        }
+    except Exception as e:
+        logger.error(f"[Chat] Failed to get history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
+
+
+@router.get("/chat/sessions")
+async def list_chat_sessions(
+    current_user: AuthUser = Depends(get_current_user),
+    limit: int = 50
+):
+    """
+    List all chat sessions for the current user with their latest message.
+    
+    Returns a list of sessions with:
+    - session_id
+    - last_message (truncated)
+    - last_role
+    - updated_at
+    """
+    try:
+        memory = get_chat_memory()
+        sessions = memory.list_sessions(
+            user_id=current_user.id,
+            limit=limit,
+        )
+        return {
+            "sessions": sessions,
+            "count": len(sessions),
+        }
+    except Exception as e:
+        logger.error(f"[Chat] Failed to list sessions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list chat sessions")
+
+
 @router.delete("/chat/session/{session_id}")
-async def clear_chat_session(session_id: str):
+async def clear_chat_session(
+    session_id: str,
+    current_user: AuthUser = Depends(get_current_user)
+):
     """
     Clear a chat session and its associated context.
     
@@ -179,11 +264,14 @@ async def clear_chat_session(session_id: str):
     try:
         logger.info(f"[Chat] Clearing session: {session_id}")
         
-        # Use persistent storage
+        # Clear RAG chain
         from core.rag_storage import get_rag_storage
         storage = get_rag_storage()
-        
         deleted = storage.delete_rag_chain(session_id)
+        
+        # Clear chat memory
+        memory = get_chat_memory()
+        memory.clear_session(user_id=current_user.id, session_id=session_id)
         
         if deleted:
             logger.info(f"[Chat]   Successfully deleted session: {session_id}")
@@ -238,3 +326,4 @@ async def get_storage_health():
             "status": "error",
             "error": str(e)
         }
+

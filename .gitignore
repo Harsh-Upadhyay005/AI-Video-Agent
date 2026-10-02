@@ -218,9 +218,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# ============================================================================
+#  ===============
 # AI Video Agent Specific - Security & Application Data
-# ============================================================================
+#  ===============
 
 # Secrets and credentials - NEVER COMMIT!
 *.key

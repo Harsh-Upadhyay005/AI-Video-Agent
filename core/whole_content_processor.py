@@ -239,21 +239,24 @@ class WholeContentProcessor:
         constraint: Dict[str, Any]
     ) -> List[str]:
         """
-        Summarize each section (map phase).
+        Summarize each section in parallel (map phase).
+        
+        Uses ThreadPoolExecutor for concurrent API calls to cut
+        summarization time by ~75% for multi-section documents.
         
         Args:
             sections: List of section lists
             constraint: User constraints
             
         Returns:
-            List of section summaries
+            List of section summaries (in original order)
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         llm = self.mistral_client._get_llm()
         if llm is None:
             logger.error("[WholeContent] LLM not available")
             return []
-        
-        section_summaries = []
         
         # Create map prompt
         map_prompt = ChatPromptTemplate.from_messages([
@@ -269,28 +272,41 @@ class WholeContentProcessor:
         
         map_chain = map_prompt | llm | StrOutputParser()
         
-        for i, section in enumerate(sections):
-            try:
-                # Combine section chunks with metadata
-                section_text = self._format_section_with_metadata(section)
-                
-                logger.info(f"[WholeContent] Summarizing section {i+1}/{len(sections)} ({len(section_text)} chars)")
-                
-                summary = self.mistral_client.invoke_with_retry(
-                    map_chain,
-                    {"text": section_text},
-                    operation_name=f"section summarization {i+1}/{len(sections)}"
-                )
-                
-                section_summaries.append(summary)
-                
-            except MistralRateLimitError as e:
-                logger.error(f"[WholeContent] Rate limit on section {i+1}: {e}")
-                # Continue with what we have
-                break
-            except Exception as e:
-                logger.warning(f"[WholeContent] Error on section {i+1}: {e}")
-                continue
+        total = len(sections)
+        results = {}
+        
+        def _summarize_one(idx: int, section: List[Document]) -> tuple:
+            section_text = self._format_section_with_metadata(section)
+            logger.info(f"[WholeContent] Summarizing section {idx+1}/{total} ({len(section_text)} chars)")
+            summary = self.mistral_client.invoke_with_retry(
+                map_chain,
+                {"text": section_text},
+                operation_name=f"section summarization {idx+1}/{total}"
+            )
+            return idx, summary
+        
+        # Use up to 4 parallel workers for Mistral API calls
+        max_workers = min(4, total)
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_summarize_one, i, section): i
+                for i, section in enumerate(sections)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    i, summary = future.result()
+                    results[i] = summary
+                except MistralRateLimitError as e:
+                    logger.error(f"[WholeContent] Rate limit on section {idx+1}: {e}")
+                    # Don't submit more — break out
+                    break
+                except Exception as e:
+                    logger.warning(f"[WholeContent] Error on section {idx+1}: {e}")
+        
+        # Reassemble in original order
+        section_summaries = [results[i] for i in range(total) if i in results]
         
         logger.info(f"[WholeContent] Generated {len(section_summaries)} section summaries")
         return section_summaries

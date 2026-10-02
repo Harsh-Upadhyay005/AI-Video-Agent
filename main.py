@@ -354,9 +354,9 @@ def run_pipeline(
     }
 
 
-# ============================================================================
+#  ===============
 # RAG Chain Storage - Now using persistent storage with Redis/in-memory fallback
-# ============================================================================
+#  ===============
 
 from core.rag_storage import get_rag_storage
 
